@@ -157,14 +157,20 @@ html body .h3-lora-filepick{border:1px dashed var(--line-3);background:rgba(255,
 html body .h3-lora-danger{border-color:var(--bad-line)!important;color:var(--bad)!important;background:var(--bad-soft)}
 html body .h3-lora-errbox{background:var(--bad-soft);border:1px solid var(--bad-line);color:var(--bad)}
 
-/* LoRA quick list on 作成 / 一括: two columns, full names (up to 2 lines) */
+/* LoRA quick list on 作成 / 一括: two columns, full names (up to 2 lines).
+   ↑↓ buttons are hidden; order is changed by long-press + drag (next.js). */
 html body .h3-lora-quick{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
-html body .h3-lora-qrow{grid-template-columns:46px minmax(0,1fr) 26px 26px;grid-template-rows:1fr auto;gap:7px 4px;align-items:center;padding:10px;border:1px solid var(--line);border-top:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025);transition:border-color .15s,background .15s}
+html body .h3-lora-qrow{position:relative;grid-template-columns:52px minmax(0,1fr);grid-template-rows:1fr auto;gap:8px 6px;align-items:center;padding:10px;border:1px solid var(--line);border-top:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.025);transition:border-color .15s,background .15s,box-shadow .15s;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
+html body .h3-lora-qrow::after{content:"";position:absolute;top:10px;right:9px;width:10px;height:14px;opacity:.35;background:radial-gradient(circle,var(--ink) 1.2px,transparent 1.6px) 0 0/5px 5px;pointer-events:none}
 html body .h3-lora-qrow:has(.h3-lora-toggle.active){border-color:var(--accent-line);background:linear-gradient(180deg,rgba(255,90,31,.10),rgba(255,90,31,.03))}
-html body .h3-lora-qname{grid-column:1/-1;white-space:normal;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;font-size:13px;line-height:1.3;font-weight:600;align-self:start;color:var(--ink);overflow-wrap:anywhere}
-html body .h3-lora-qrow .h3-lora-toggle{padding:7px 0;font-size:11px;font-weight:700}
-html body .h3-lora-qrow .h3-lora-strength{min-width:0;width:100%;padding:6px 4px!important;text-align:center;border-radius:10px;font-family:var(--mono)}
-html body .h3-lora-qrow .h3-lora-mini{padding:6px 0;font-size:11px}
+html body .h3-lora-qname{grid-column:1/-1;white-space:normal;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;font-size:13px;line-height:1.3;font-weight:600;align-self:start;color:var(--ink);overflow-wrap:anywhere;padding-right:14px}
+html body .h3-lora-qrow .h3-lora-toggle{padding:8px 0;font-size:11px;font-weight:700}
+html body .h3-lora-qrow .h3-lora-strength{min-width:0;width:100%;padding:7px 6px!important;text-align:center;border-radius:10px;font-family:var(--mono);-webkit-user-select:text;user-select:text}
+html body .h3-lora-qrow .h3-lora-mini{display:none}
+html body .h3-lora-qrow.nx-lift{z-index:20;pointer-events:none;border-color:var(--accent);background:#1d1d22;box-shadow:0 22px 44px -12px rgba(0,0,0,.95),0 0 0 1px var(--accent);transition:none}
+html body .h3-lora-qrow.nx-target{border-color:var(--accent);border-style:dashed;background:rgba(255,90,31,.08)}
+html body .h3-lora-quick.nx-dragging .h3-lora-qrow:not(.nx-lift):not(.nx-target){opacity:.55}
+html body .h3-lora-quick-hint{margin-top:8px}
 @media(max-width:340px){html body .h3-lora-quick{grid-template-columns:1fr}}
 
 /* ---------- image library / prompt presets (injected) ---------- */
