@@ -1,2 +1,8 @@
-# h3-studio-next
-H3 Studio β — design test (look only; same functions as h3-studio)
+# H3 Studio β
+
+H3 Studio のデザインテスト版です。機能・画面構成は H3 Studio と同じで、見た目（next.css）だけが違います。
+
+- URL: https://shuichisaitofd.github.io/h3-studio-next/
+- 案件データは H3 Studio と共有（同じブラウザなら同じ案件が出ます）。
+- Veda / 10Eros / 追加LoRA の機能ファイルは h3-studio のものをそのまま読み込みます。
+- 元に戻すときは H3 Studio（https://shuichisaitofd.github.io/h3-studio/）を開くだけです。このリポジトリを消しても H3 Studio には影響しません。

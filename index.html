@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ja">
+<head><base href="https://shuichisaitofd.github.io/runpod-h3-mobile/">
+<meta charset="utf-8">
+<script>
+/* H3 Studio β (design test; shares projects with H3 Studio): keep this site's projects separate from the other H3 sites on github.io (same browser storage). Only these keys get a prefix. */
+(function(){try{var MAP={h3MobileProjects:1,h3MobileActiveProjectId:1,h3MobileProjectFavOnly:1};var P=Storage.prototype,g=P.getItem,s=P.setItem,r=P.removeItem;
+function k(o,x){return(o===window.localStorage&&MAP[x])?'studio.'+x:x;}
+P.getItem=function(x){return g.call(this,k(this,x));};
+P.setItem=function(x,v){return s.call(this,k(this,x),v);};
+P.removeItem=function(x){return r.call(this,k(this,x));};}catch(e){}})();
+</script>
+<meta name="viewport" content="width=device-width,initial-scale=1,interactive-widget=resizes-content">
+<title>H3 Studio β</title>
+<link rel="stylesheet" href="styles.css?v=20260928c">
+<link rel="stylesheet" href="click-fix.css?v=20260928c">
+<meta name="theme-color" content="#f3f0ea">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700;800&family=Geist+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://shuichisaitofd.github.io/h3-studio-next/next.css?v=1">
+</head>
+<body>
+<div class="app">
+<header class="header">
+<div class="row"><div class="brand">H3 Studio</div><div class="runtime" id="runtime">起動時間 --:--:--</div><div class="status" id="status">接続確認中</div></div>
+<div class="row"><div class="billing" id="billing">残高 -- / 残り -- / 使用額 --</div></div>
+<div class="project-tabs" id="tabs"><select id="projectSelect" aria-label="案件切替"></select><button type="button" class="secondary compact" id="openProjects" onclick="openProjectSettings()">管理</button><button id="add" type="button" hidden></button></div>
+</header>
+<main>
+<section class="page active" data-page="create">
+<div id="connectNotice" class="notice">ComfyUIとの接続を確認しています。</div>
+<div class="card"><h2>生成モード</h2><div class="mode"><button class="active" data-mode="i2v">画像から動画</button><button data-mode="ref">参照から動画</button></div></div>
+<div class="card"><h2>入力</h2><label>タイトル</label><input id="title" value="案件A - テスト01">
+<div id="i2v"><label>元画像</label><div class="filebox ref-field"><img class="input-thumb hidden" id="image0preview" alt="選択中の画像"><input id="image0" type="file" accept="image/*"></div></div>
+<div id="ref" class="hidden"><label>Ref2VA 構成</label><div class="mode mode3" id="refVariant"><button class="active" data-variant="04">04: BlockCache Balanced</button><button data-variant="03">03: Turbo Enhanced</button><button data-variant="05">05: SLA + BlockCache</button><button data-variant="fast">06 高速</button><button data-variant="stable">06 安定</button></div><label>参照画像1</label><div class="filebox ref-field"><img class="input-thumb hidden" id="ref0preview" alt="選択中の画像"><input id="ref0" type="file" accept="image/*"><button type="button" class="secondary ref-clear" data-target="ref0">削除</button></div><label>参照画像2</label><div class="filebox ref-field"><img class="input-thumb hidden" id="ref1preview" alt="選択中の画像"><input id="ref1" type="file" accept="image/*"><button type="button" class="secondary ref-clear" data-target="ref1">削除</button></div><label>参照画像3</label><div class="filebox ref-field"><img class="input-thumb hidden" id="ref2preview" alt="選択中の画像"><input id="ref2" type="file" accept="image/*"><button type="button" class="secondary ref-clear" data-target="ref2">削除</button></div><label>参照画像4</label><div class="filebox ref-field"><img class="input-thumb hidden" id="ref3preview" alt="選択中の画像"><input id="ref3" type="file" accept="image/*"><button type="button" class="secondary ref-clear" data-target="ref3">削除</button></div></div>
+<label>プロンプト</label><textarea id="prompt"></textarea></div>
+<div class="card"><h2>生成設定</h2><div class="grid2"><div><label>秒数</label><input id="sec" type="number" value="10" min="1" step="1" inputmode="numeric"></div><div id="stepsWrap" class="hidden"><label>Steps</label><input id="steps" type="number" value="12" min="1" max="50"></div></div>
+<div class="grid2"><div><label>解像度（MP）</label><input id="mp" type="number" value="0.5" min="0.1" max="2" step="0.05" inputmode="decimal"></div><div><label>画面比率</label><select id="ratio"><option selected>元画像と同じ</option><option>2:3</option><option>3:2</option><option>9:16</option><option>16:9</option><option>1:1</option><option>4:3</option><option>3:4</option></select></div></div>
+<div id="refextra" class="hidden"><label>ref_image_size</label><select id="refSize"><option>match</option><option selected>max</option></select><label>Seed</label><input id="seed" type="number" value="-1"></div>
+<div id="modeNote" class="small" style="margin-top:10px"></div></div>
+<div class="card"><div class="actions"><button class="secondary" id="dup" type="button">複製</button><button class="primary" id="gen" type="button">ComfyUIで生成</button></div></div>
+</section>
+
+<section class="page" data-page="batch">
+<div class="card"><h2>一括生成</h2><div class="small">同じプロンプトと共通設定で最大5件を1件ずつ順番に生成します。</div></div>
+<div class="card"><h2>生成モード</h2><div class="mode"><button class="active" data-batch-mode="i2v">画像から動画</button><button data-batch-mode="ref2va">参照から動画</button></div></div>
+<div class="card"><h2>共通設定</h2>
+<label>バッチ名</label><input id="batchTitle" value="一括生成">
+<label>プロンプト</label><textarea id="batchPrompt"></textarea><button class="secondary compact" id="copyBatchPrompt">プロンプトをコピー</button>
+<div class="grid2"><div><label>秒数</label><input id="batchSec" type="number" value="10" min="1" step="1" inputmode="numeric"></div><div id="batchStepsWrap" class="hidden"><label>Steps</label><input id="batchSteps" type="number" value="12" min="1" max="50"></div></div>
+<div class="grid2"><div><label>解像度（MP）</label><input id="batchMp" type="number" value="0.5" min="0.1" max="2" step="0.05" inputmode="decimal"></div><div><label>画面比率</label><select id="batchRatio"><option selected>元画像と同じ</option><option>2:3</option><option>3:2</option><option>9:16</option><option>16:9</option><option>1:1</option><option>4:3</option><option>3:4</option></select></div></div>
+<div class="grid2"><div><label>Seed方式</label><select id="batchSeedMode"><option value="sequence" selected>自動連番</option><option value="fixed">固定</option><option value="random">ランダム</option></select></div><div><label>先頭Seed</label><input id="batchSeed" type="number" value="12345"></div></div>
+<div id="batchRefOptions" class="hidden"><label>Ref2VA 構成</label><div class="mode mode3" id="batchRefVariant"><button class="active" data-batch-variant="04">04: BlockCache Balanced</button><button data-batch-variant="03">03: Turbo Enhanced</button><button data-batch-variant="05">05: SLA + BlockCache</button><button data-batch-variant="fast">06 高速</button><button data-batch-variant="stable">06 安定</button></div><label>ref_image_size</label><select id="batchRefSize"><option>match</option><option selected>max</option></select></div>
+<div id="batchModeNote" class="small" style="margin-top:10px">I2V: <b>Turbo + Sage / 4step固定</b></div>
+</div>
+<div class="card" id="batchI2VInputs"><div class="row"><h2 style="margin:0;flex:1">入力画像</h2><span class="small" id="batchI2VCount">0 / 5</span></div><label class="batch-filepick">＋ 画像を選択（最大5枚）<input id="batchI2VFiles" type="file" accept="image/*" multiple></label><div id="batchI2VList" class="batch-list"></div></div>
+<div class="card hidden" id="batchRefInputs"><div class="row"><h2 style="margin:0;flex:1">参照セット</h2><span class="small" id="batchRefCount">1 / 5</span></div><div class="small">1セット＝1本の動画。各セットで参照画像を1〜4枚指定できます。</div><div id="batchRefList" class="batch-list"></div><button class="secondary batch-add" id="addBatchRefSet">＋ 参照セットを追加</button></div>
+<div class="card"><div class="batch-summary"><div><span class="small">実行方式</span><b>順次実行</b></div><div><span class="small">予定件数</span><b id="batchJobCount">0件</b></div></div><div id="batchMessage" class="notice hidden"></div><div class="actions"><button class="secondary" id="clearBatch">全削除</button><button class="primary" id="startBatch">一括生成を開始</button></div></div>
+</section>
+
+<section class="page" data-page="running"><div class="card"><div class="row"><h2 style="margin:0;flex:1">実行中</h2><button class="secondary" id="refreshQueue">更新</button></div><div id="queue"></div></div></section>
+<section class="page" data-page="history"><div class="card"><div class="history-head"><h2>履歴</h2><div class="history-tools"><div class="view-toggle"><button class="secondary active" id="historyListMode">リスト</button><button class="secondary" id="historyLargeMode">大サムネ</button></div><button class="secondary" id="downloadAll">一括ダウンロード</button><button class="secondary" id="refreshHistory">更新</button></div></div><div id="downloadMessage" class="small"></div><div id="historyList"></div></div></section>
+<section class="page" data-page="lora"><div id="h3LoraPage"></div></section>
+<section class="page" data-page="projects">
+<div class="card"><div class="row"><h2 style="margin:0;flex:1">案件設定</h2><button class="secondary" id="addProject">追加</button></div><div class="small">表示中の案件だけヘッダーのプルダウンに出ます。使わない案件はアーカイブへ移します。</div></div>
+<div class="card"><div class="row" style="align-items:center"><h2 style="margin:0;flex:1">表示中</h2><button class="secondary compact" id="projectFavOnly">☆ すべて表示中</button></div><div class="small" style="margin:6px 0 10px">☆をタップで⭐に。右のボタンで⭐だけ表示（ヘッダーのプルダウンも連動）。</div><div id="projectActiveList"></div></div>
+<div class="card"><h2>アーカイブ</h2><div id="projectArchiveList"></div></div>
+</section>
+<section class="page" data-page="settings">
+<div class="card"><h2>モデル管理</h2><div class="small">必要なモデルだけRunPodへ直接ダウンロードします。</div><div class="model-actions"><button class="primary" id="prepareRef">Ref2VAを準備</button><button class="primary" id="prepareI2V">I2Vを準備</button></div><div id="modelMessage" class="notice hidden"></div><div id="modelList" class="model-list"><div class="small">モデル状態を確認中...</div></div></div>
+<div class="card"><h2>接続先Pod</h2><div class="small">RunPod PodのComfyUI Base URLを登録して切り替えられます。未登録のときはこのページの配信元へ直接接続します（APIキー等の認証情報は保存しません）。</div><div id="podList" class="model-list" style="margin-top:10px"></div><div class="grid2" style="margin-top:10px"><div><label>Pod名</label><input id="newPodName" placeholder="例: Pod A"></div><div><label>Base URL</label><input id="newPodUrl" placeholder="https://xxxx-8188.proxy.runpod.net"></div></div><div class="actions" style="margin-top:10px"><button class="secondary" id="addPod" type="button" onclick="h3AddPod()">追加</button></div><div id="podMessage" class="small" style="margin-top:8px"></div></div>
+<div class="card"><h2>接続</h2><div class="small">このページはComfyUIと同じ8188上で動作するため、ComfyUI URLの入力は不要です。</div><label>API workflow</label><div id="workflowStatus" class="notice">確認中</div></div>
+</section>
+</main>
+</div>
+<nav class="bottom"><div class="bottomin"><button class="nav active" data-target="create">作成</button><button class="nav" data-target="batch">一括</button><button class="nav" data-target="running">実行中</button><button class="nav" data-target="history">履歴</button><button class="nav" data-target="lora">LoRA</button><button class="nav" data-target="settings">設定</button></div></nav>
+<div class="media-modal hidden" id="mediaModal" role="dialog" aria-modal="true"><button class="modal-fullscreen hidden" id="modalFullscreen" type="button" aria-label="全画面表示">⛶</button><button class="modal-close" id="modalClose" type="button" aria-label="閉じる">×</button><div class="modal-body" id="modalBody"></div></div>
+<script src="boot-fix.js?v=20260928c"></script>
+<script src="app.js?v=20261101a"></script>
+<script src="job-timer.js?v=20260928c"></script>
+<script src="project-ui.js?v=20261026a"></script>
+<script src="pod-add-fix.js?v=20260928c"></script>
+<script src="connect-fix.js?v=20260928c"></script>
+<script src="copy-prompts.js?v=20260928c"></script>
+<script>
+(()=>{const originalFetch=window.fetch.bind(window);window.fetch=async(input,init)=>{const r=await originalFetch(input,init);try{const url=typeof input==='string'?input:(input&&input.url)||'';if(!/\/history\//.test(url)||!r.ok)return r;const clone=r.clone();const data=await clone.json();let changed=false;for(const item of Object.values(data||{})){if(!item||item.status?.completed===true)continue;const outputs=item.outputs||{};const hasOutput=Object.values(outputs).some(node=>['videos','images','gifs','files','audio'].some(k=>Array.isArray(node?.[k])&&node[k].length));if(hasOutput){item.status=item.status||{};item.status.completed=true;changed=true;}}if(!changed)return r;return new Response(JSON.stringify(data),{status:r.status,statusText:r.statusText,headers:r.headers});}catch{return r;}};})();
+</script>
+<script src="batch-v2.js?v=20260928c"></script>
+<script src="history-autoplay.js?v=20260928c"></script>
+<script src="history-thumbnails.js?v=20260928c"></script>
+<script src="media-library.js?v=20260928c"></script>
+<script src="pod-runtime.js?v=20260928c"></script>
+<script src="pod-billing.js?v=20260928c"></script>
+<script src="lora-library.js?v=20261022a"></script>
+<script src="lora-catalog-extra.js?v=20260928c"></script>
+<script src="https://shuichisaitofd.github.io/h3-studio/veda-lora-extra.js?v=1"></script>
+<script src="prompt-library.js?v=20260928c" data-h3-prompt-library="1"></script>
+<script src="ios-keyboard.js?v=20260928c"></script>
+<script src="media-modal-fix.js?v=20261006c"></script>
+<script src="click-fix.js?v=20261006c"></script>
+<script src="https://shuichisaitofd.github.io/h3-studio/veda-panel.js?v=1"></script>
+<script src="https://shuichisaitofd.github.io/h3-studio/veda-eros.js?v=1"></script></body></html>
