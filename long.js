@@ -2,7 +2,7 @@
    When ON, a "ComfyUIで生成" press of 画像から動画 is sent to /h3-mobile/api/long/run instead of /prompt.
    The Pod makes clip 1, then the continuation clip(s), then joins them into one MP4 (history: "N本つなぎ"). */
 (function(){
-  const KEY='h3next.longClips';
+  const KEY='h3next.longClips',P2KEY='h3next.longPrompt2';
   let clips=0;try{clips=parseInt(localStorage.getItem(KEY)||'0',10)||0;}catch(e){}
   let armedUntil=0;
 
@@ -17,6 +17,7 @@
       '<button type="button" data-long="0">OFF</button>'+
       '<button type="button" data-long="2">2本つなぐ</button>'+
       '<button type="button" data-long="3">3本つなぐ</button></div>'+
+      '<div id="longP2Wrap" class="hidden" style="margin-top:12px"><label>2本目以降のプロンプト（空欄なら1本目と同じ）</label><textarea id="longPrompt2" placeholder="例：カメラが引いて全身が映る。曲が盛り上がる"></textarea></div>'+
       '<div class="small" id="longNote" style="margin-top:10px"></div>'+
       '<div class="small" id="longStatus" style="margin-top:8px"></div>';
     genCard.parentNode.insertBefore(c,genCard);
@@ -25,12 +26,16 @@
       try{localStorage.setItem(KEY,String(clips));}catch(e){}
       paint();
     }));
+    const p2=document.getElementById('longPrompt2');
+    try{p2.value=localStorage.getItem(P2KEY)||'';}catch(e){}
+    p2.addEventListener('input',()=>{try{localStorage.setItem(P2KEY,p2.value);}catch(e){}});
     paint();
     setTimeout(()=>{try{if(typeof apiUrl==='function'){lastBase=apiUrl('');poll();}}catch(e){}},1500);
   }
 
   function paint(){
     document.querySelectorAll('#longMode [data-long]').forEach(b=>b.classList.toggle('active',(parseInt(b.dataset.long,10)||0)===clips));
+    const w=document.getElementById('longP2Wrap');if(w)w.classList.toggle('hidden',clips<2);
     const note=document.getElementById('longNote');if(!note)return;
     const sec=parseFloat((document.getElementById('sec')||{}).value)||0;
     note.textContent=clips?`画像から動画のみ。秒数×${clips}本 ≒ ${Math.round(sec*clips)}秒の動画を自動でつなぎます（時間も約${clips}倍）。テスト用Podが必要です。`:'OFF：いつもどおり1本だけ作ります。';
@@ -50,7 +55,7 @@
         const g=body&&body.prompt;
         if(g&&g['105:104']&&g['105:104'].class_type==='MiniMaxH3ImageToVideo'){
           armedUntil=0;
-          const r=await origFetch(apiBase(url)+'/h3-mobile/api/long/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:g,extra_data:body.extra_data||{},clips})});
+          const r=await origFetch(apiBase(url)+'/h3-mobile/api/long/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:g,extra_data:body.extra_data||{},clips,prompt2:((document.getElementById('longPrompt2')||{}).value||'').trim()})});
           if(r.status===404||r.status===405)throw new Error('このPodは長尺テスト用のイメージではありません（h3-longtest のPodで使ってください）。長尺をOFFにすると通常どおり作れます。');
           lastBase=apiBase(url);poll();
           return r;
@@ -73,7 +78,7 @@
       const j=await r.json();
       const runs=(j.runs||[]).slice(0,3);
       const m=s=>`${Math.floor(s/60)}分${String(s%60).padStart(2,'0')}秒`;
-      box.innerHTML=runs.map(x=>`<div>・${x.clips}本つなぎ：<b>${x.stage}</b>（${m(x.elapsed||0)}）${x.error?'<br><span style="color:#ff6b6b">'+String(x.error).replace(/[<>&]/g,'')+'</span>':''}${x.done&&!x.error?'<br>履歴の「'+x.clips+'本つなぎ」が完成版です':''}</div>`).join('');
+      box.innerHTML=runs.map(x=>`<div>・${x.clips}本つなぎ：<b>${x.stage}</b>（${m(x.elapsed||0)}）${x.prompt2?'・2本目は別プロンプト':''}${x.error?'<br><span style="color:#ff6b6b">'+String(x.error).replace(/[<>&]/g,'')+'</span>':''}${x.done&&!x.error?'<br>履歴の「'+x.clips+'本つなぎ」が完成版です':''}</div>`).join('');
       if(runs.some(x=>!x.done))timer=setTimeout(poll,10000);
     }catch(e){timer=setTimeout(poll,20000);}
   }
