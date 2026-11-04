@@ -3,13 +3,29 @@
    The Pod makes clip 1, then the continuation clip(s), then joins them into one MP4 (history: "N本つなぎ").
    Progress is shown on the 作成 page (long card) and on the 実行中 page (top card). */
 (function(){
-  const KEY='h3next.longClips',PKEY='h3next.longPrompt';
-  let clips=0;try{clips=parseInt(localStorage.getItem(KEY)||'0',10)||0;}catch(e){}
+  // Settings are kept per 案件 (project): h3next.long.<projectId>.clips / .p2 / .p3
+  let clips=0;
   let armedUntil=0;
   const MAXP=3; // prompt boxes for clip 2..3
 
   function store(k,v){try{localStorage.setItem(k,v);}catch(e){}}
   function load(k){try{return localStorage.getItem(k)||'';}catch(e){return '';}}
+  function pid(){try{return (typeof getActiveProjectId==='function'&&getActiveProjectId())||'none';}catch(e){return 'none';}}
+  function pkey(name,id){return 'h3next.long.'+(id||pid())+'.'+name;}
+  // once: the old shared values (before per-project) go to the project that is open now
+  function migrate(){
+    try{
+      const old={clips:localStorage.getItem('h3next.longClips'),p2:localStorage.getItem('h3next.longPrompt2'),p3:localStorage.getItem('h3next.longPrompt3')};
+      if(old.clips==null&&old.p2==null&&old.p3==null)return;
+      for(const n of ['clips','p2','p3'])if(old[n]!=null&&localStorage.getItem(pkey(n))==null)localStorage.setItem(pkey(n),old[n]);
+      localStorage.removeItem('h3next.longClips');localStorage.removeItem('h3next.longPrompt2');localStorage.removeItem('h3next.longPrompt3');
+    }catch(e){}
+  }
+  function loadProject(){
+    clips=parseInt(load(pkey('clips'))||'0',10)||0;
+    for(let n=2;n<=MAXP;n++){const t=document.getElementById('longPrompt'+n);if(t)t.value=load(pkey('p'+n));}
+    paint();
+  }
 
   function card(){
     const gen=document.getElementById('gen');
@@ -32,18 +48,18 @@
     genCard.parentNode.insertBefore(c,genCard);
     c.querySelectorAll('[data-long]').forEach(b=>b.addEventListener('click',()=>{
       clips=parseInt(b.dataset.long,10)||0;
-      store(KEY,String(clips));
+      store(pkey('clips'),String(clips));
       paint();
     }));
-    // the old single "2本目以降" box (h3next.longPrompt2) is the clip 2 box now (same key)
     for(let n=2;n<=MAXP;n++){
       const t=document.getElementById('longPrompt'+n);
-      t.value=load(PKEY+n);
-      t.addEventListener('input',()=>store(PKEY+n,t.value));
+      t.addEventListener('input',()=>store(pkey('p'+n),t.value));
     }
-    paint();
+    migrate();
+    loadProject();
+    window.addEventListener('h3:project-changed',e=>{setTimeout(loadProject,0);});
     runCard();
-    setTimeout(()=>{try{if(typeof apiUrl==='function'){lastBase=apiUrl('');poll();}}catch(e){}},1500);
+    setTimeout(()=>{loadProject();try{if(typeof apiUrl==='function'){lastBase=apiUrl('');poll();}}catch(e){}},1500);
   }
 
   function runCard(){
