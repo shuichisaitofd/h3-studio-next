@@ -119,6 +119,7 @@
     busy=true;clearTimeout(timer);
     try{
       const r=await origFetch(lastBase+'/h3-mobile/api/long/status',{cache:'no-store'});
+      longApi=r.ok?true:(r.status===404?false:longApi);
       if(r.ok){
         const j=await r.json();
         const runs=(j.runs||[]).slice(0,3);
@@ -137,5 +138,84 @@
     busy=false;
   }
 
-  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',card);else card();
+
+  // ---- パーツ (long-video parts): hidden from 履歴, shown in their own view; split downloads ----
+  let longApi=null; // true when this Pod has the long-video API
+  const PART_RE=/filename=[^&]*_part\d+_\d+_\.mp4(&|$)/;
+  function base(){try{return typeof apiUrl==='function'?apiUrl(''):lastBase;}catch(e){return lastBase;}}
+  function viewUrl(f){return base()+`/view?filename=${encodeURIComponent(f.filename)}&subfolder=${encodeURIComponent(f.subfolder||'')}&type=${encodeURIComponent(f.type||'output')}`;}
+  function hideParts(){
+    const root=document.getElementById('historyList');if(!root)return;
+    root.querySelectorAll('.history-card').forEach(c=>{
+      const m=c.querySelector('.history-media');const src=(m&&(m.getAttribute('src')||''))||'';
+      if(PART_RE.test(src))c.classList.add('hidden');
+    });
+  }
+  function partsUi(){
+    const tools=document.querySelector('section[data-page="history"] .history-tools');
+    const list=document.getElementById('historyList');
+    if(!tools||!list||document.getElementById('longPartsBtn'))return;
+    const b=document.createElement('button');b.className='secondary';b.id='longPartsBtn';b.type='button';b.textContent='パーツ';
+    tools.insertBefore(b,tools.firstChild);
+    const v=document.createElement('div');v.id='longPartsView';v.className='hidden';
+    v.innerHTML='<div class="row" style="flex-wrap:wrap;gap:8px;margin:12px 0 4px;align-items:center"><div class="small" style="flex:1;min-width:160px">長尺のパーツ（1本目・2本目…）。つないだ完成版は「履歴」にあります。</div><button class="secondary" type="button" id="longPartsDl">パーツを一括ダウンロード</button></div><div id="longPartsMsg" class="small"></div><div id="longPartsList"></div>';
+    list.parentNode.insertBefore(v,list.nextSibling);
+    b.addEventListener('click',()=>showParts(v.classList.contains('hidden')));
+    v.querySelector('#longPartsDl').addEventListener('click',()=>{
+      if(longApi!==true){v.querySelector('#longPartsMsg').textContent='このPodは長尺テスト用ではありません。';return;}
+      v.querySelector('#longPartsMsg').textContent='ダウンロードを開始しました。準備に少し時間がかかります。Safariのアドレスバーのダウンロード表示（↓）で確認できます。';
+      location.href=base()+'/h3-mobile/api/long/download?kind=parts';
+    });
+    new MutationObserver(hideParts).observe(list,{childList:true,subtree:true});
+    hideParts();
+  }
+  function showParts(on){
+    const v=document.getElementById('longPartsView'),list=document.getElementById('historyList'),b=document.getElementById('longPartsBtn');
+    if(!v||!list)return;
+    v.classList.toggle('hidden',!on);list.classList.toggle('hidden',!!on);
+    if(b){b.textContent=on?'履歴に戻る':'パーツ';b.classList.toggle('active',!!on);}
+    if(on)loadParts();
+  }
+  async function loadParts(){
+    const root=document.getElementById('longPartsList');if(!root)return;
+    root.innerHTML='<div class="small" style="margin-top:12px">読込中...</div>';
+    try{
+      const r=await origFetch(base()+'/h3-mobile/api/long/parts',{cache:'no-store'});
+      if(r.status===404){root.innerHTML='<div class="small" style="margin-top:12px">このPodは長尺テスト用ではありません。</div>';return;}
+      if(!r.ok)throw new Error(r.status+' '+r.statusText);
+      const runs=(await r.json()).runs||[];
+      if(!runs.length){root.innerHTML='<div class="small" style="margin-top:12px">パーツはまだありません。</div>';return;}
+      root.innerHTML='';
+      for(const run of runs){
+        const box=document.createElement('div');box.className='long-parts-run';box.style.marginTop='16px';
+        const when=new Date((run.mtime||0)*1000);const ts=isNaN(when)?'':`${when.getMonth()+1}/${when.getDate()} ${String(when.getHours()).padStart(2,'0')}:${String(when.getMinutes()).padStart(2,'0')}`;
+        box.innerHTML=`<div><b>${esc(run.title||run.id)}</b> <span class="badge">${run.clips}本つなぎ</span>${run.seconds?`<span class="badge">各${esc(run.seconds)}秒</span>`:''}</div><div class="meta small"><span>${ts}</span><span>${esc(run.stage||(run.joined?'完成':'つなぐ前'))}</span></div>`;
+        for(const f of run.parts){
+          const url=viewUrl(f);
+          const c=document.createElement('div');c.className='history-card';c.style.marginTop='8px';
+          c.innerHTML=`<div class="thumbrow"><video class="thumb history-media" muted playsinline preload="metadata" src="${url}"></video><div class="history-content"><div><b>${f.n}本目</b></div><div class="meta small"><span>${(f.size/1048576).toFixed(1)} MB</span></div><div class="history-actions"><button class="secondary open-popup" type="button">開く</button><a class="secondary linkbtn" href="${url}" download>ダウンロード</a></div></div></div>`;
+          const open=()=>{try{openMedia(url,true);}catch(e){window.open(url,'_blank');}};
+          c.querySelector('.history-media').onclick=open;c.querySelector('.open-popup').onclick=open;
+          box.appendChild(c);
+        }
+        root.appendChild(box);
+      }
+    }catch(e){root.innerHTML=`<div class="notice danger" style="margin-top:12px">パーツの取得に失敗: ${esc(e.message)}</div>`;}
+  }
+  // 履歴の「一括ダウンロード」: on the long-video Pod, download everything except the parts
+  document.addEventListener('click',e=>{
+    const t=e.target&&e.target.closest&&e.target.closest('#downloadAll');
+    if(t&&longApi===true){
+      e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();
+      const msg=document.getElementById('downloadMessage');
+      if(msg)msg.textContent='ダウンロードを開始しました（長尺のパーツは含みません。パーツは「パーツ」から）。準備に少し時間がかかります。Safariのアドレスバーのダウンロード表示（↓）で確認できます。';
+      location.href=base()+'/h3-mobile/api/long/download?kind=main';
+      return;
+    }
+    const nav=e.target&&e.target.closest&&e.target.closest('.nav[data-target="history"],#refreshHistory');
+    if(nav)showParts(false);
+  },true);
+
+  function init(){card();partsUi();}
+  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',init);else init();
 })();
