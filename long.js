@@ -1,10 +1,15 @@
 /* H3 Studio β: long-video test (needs the h3-longtest Pod image).
    When ON, a "ComfyUIで生成" press of 画像から動画 is sent to /h3-mobile/api/long/run instead of /prompt.
-   The Pod makes clip 1, then the continuation clip(s), then joins them into one MP4 (history: "N本つなぎ"). */
+   The Pod makes clip 1, then the continuation clip(s), then joins them into one MP4 (history: "N本つなぎ").
+   Progress is shown on the 作成 page (long card) and on the 実行中 page (top card). */
 (function(){
-  const KEY='h3next.longClips',P2KEY='h3next.longPrompt2';
+  const KEY='h3next.longClips',PKEY='h3next.longPrompt';
   let clips=0;try{clips=parseInt(localStorage.getItem(KEY)||'0',10)||0;}catch(e){}
   let armedUntil=0;
+  const MAXP=3; // prompt boxes for clip 2..3
+
+  function store(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+  function load(k){try{return localStorage.getItem(k)||'';}catch(e){return '';}}
 
   function card(){
     const gen=document.getElementById('gen');
@@ -12,37 +17,58 @@
     if(!genCard||document.getElementById('longCard'))return;
     const c=document.createElement('div');
     c.className='card';c.id='longCard';
+    let boxes='';
+    for(let n=2;n<=MAXP;n++){
+      const hint=n===2?'空欄なら1本目と同じ':'空欄なら2本目と同じ';
+      boxes+=`<div class="longPWrap hidden" data-n="${n}" style="margin-top:12px"><label>${n}本目のプロンプト（${hint}）</label><textarea id="longPrompt${n}" placeholder="${n}本目で起きることだけを書く"></textarea></div>`;
+    }
     c.innerHTML='<h2>長尺（テスト）</h2>'+
       '<div class="mode mode3" id="longMode">'+
       '<button type="button" data-long="0">OFF</button>'+
       '<button type="button" data-long="2">2本つなぐ</button>'+
-      '<button type="button" data-long="3">3本つなぐ</button></div>'+
-      '<div id="longP2Wrap" class="hidden" style="margin-top:12px"><label>2本目以降のプロンプト（空欄なら1本目と同じ）</label><textarea id="longPrompt2" placeholder="例：カメラが引いて全身が映る。曲が盛り上がる"></textarea></div>'+
+      '<button type="button" data-long="3">3本つなぐ</button></div>'+boxes+
       '<div class="small" id="longNote" style="margin-top:10px"></div>'+
-      '<div class="small" id="longStatus" style="margin-top:8px"></div>';
+      '<div class="small longStatus" style="margin-top:8px"></div>';
     genCard.parentNode.insertBefore(c,genCard);
     c.querySelectorAll('[data-long]').forEach(b=>b.addEventListener('click',()=>{
       clips=parseInt(b.dataset.long,10)||0;
-      try{localStorage.setItem(KEY,String(clips));}catch(e){}
+      store(KEY,String(clips));
       paint();
     }));
-    const p2=document.getElementById('longPrompt2');
-    try{p2.value=localStorage.getItem(P2KEY)||'';}catch(e){}
-    p2.addEventListener('input',()=>{try{localStorage.setItem(P2KEY,p2.value);}catch(e){}});
+    // the old single "2本目以降" box (h3next.longPrompt2) is the clip 2 box now (same key)
+    for(let n=2;n<=MAXP;n++){
+      const t=document.getElementById('longPrompt'+n);
+      t.value=load(PKEY+n);
+      t.addEventListener('input',()=>store(PKEY+n,t.value));
+    }
     paint();
+    runCard();
     setTimeout(()=>{try{if(typeof apiUrl==='function'){lastBase=apiUrl('');poll();}}catch(e){}},1500);
+  }
+
+  function runCard(){
+    const sec=document.querySelector('section[data-page="running"]');
+    if(!sec||document.getElementById('longRunCard'))return;
+    const c=document.createElement('div');
+    c.className='card hidden';c.id='longRunCard';
+    c.innerHTML='<h2>長尺（テスト）の進み具合</h2><div class="small longStatus"></div>';
+    sec.insertBefore(c,sec.firstChild);
   }
 
   function paint(){
     document.querySelectorAll('#longMode [data-long]').forEach(b=>b.classList.toggle('active',(parseInt(b.dataset.long,10)||0)===clips));
-    const w=document.getElementById('longP2Wrap');if(w)w.classList.toggle('hidden',clips<2);
+    document.querySelectorAll('#longCard .longPWrap').forEach(w=>w.classList.toggle('hidden',clips<(parseInt(w.dataset.n,10)||99)));
     const note=document.getElementById('longNote');if(!note)return;
     const sec=parseFloat((document.getElementById('sec')||{}).value)||0;
     note.textContent=clips?`画像から動画のみ。秒数×${clips}本 ≒ ${Math.round(sec*clips)}秒の動画を自動でつなぎます（時間も約${clips}倍）。テスト用Podが必要です。`:'OFF：いつもどおり1本だけ作ります。';
   }
 
   document.addEventListener('input',e=>{if(e.target&&e.target.id==='sec')paint();});
-  document.addEventListener('click',e=>{const t=e.target&&e.target.closest&&e.target.closest('#gen');if(t)armedUntil=Date.now()+60000;},true);
+  document.addEventListener('click',e=>{
+    const t=e.target&&e.target.closest&&e.target.closest('#gen');
+    if(t)armedUntil=Date.now()+60000;
+    else if(lastBase)setTimeout(poll,300); // e.g. switching to 実行中
+  },true);
 
   function apiBase(url){const i=url.indexOf('/prompt');return url.slice(0,i);}
   const origFetch=window.fetch.bind(window);
@@ -55,9 +81,11 @@
         const g=body&&body.prompt;
         if(g&&g['105:104']&&g['105:104'].class_type==='MiniMaxH3ImageToVideo'){
           armedUntil=0;
-          const r=await origFetch(apiBase(url)+'/h3-mobile/api/long/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:g,extra_data:body.extra_data||{},clips,prompt2:((document.getElementById('longPrompt2')||{}).value||'').trim()})});
+          const prompts=[];
+          for(let n=2;n<=clips;n++)prompts.push(((document.getElementById('longPrompt'+n)||{}).value||'').trim());
+          const r=await origFetch(apiBase(url)+'/h3-mobile/api/long/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:g,extra_data:body.extra_data||{},clips,prompts,prompt2:prompts[0]||''})});
           if(r.status===404||r.status===405)throw new Error('このPodは長尺テスト用のイメージではありません（h3-longtest のPodで使ってください）。長尺をOFFにすると通常どおり作れます。');
-          lastBase=apiBase(url);poll();
+          lastBase=apiBase(url);setTimeout(poll,500);
           return r;
         }
       }
@@ -67,20 +95,30 @@
     return origFetch(input,opts);
   };
 
-  let lastBase='';let timer=null;
+  let lastBase='';let timer=null;let busy=false;
+  const esc=s=>String(s==null?'':s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+  const m=s=>`${Math.floor(s/60)}分${String(s%60).padStart(2,'0')}秒`;
   async function poll(){
-    clearTimeout(timer);
-    const box=document.getElementById('longStatus');
-    if(!lastBase||!box)return;
+    if(busy||!lastBase)return;
+    busy=true;clearTimeout(timer);
     try{
       const r=await origFetch(lastBase+'/h3-mobile/api/long/status',{cache:'no-store'});
-      if(!r.ok)return;
-      const j=await r.json();
-      const runs=(j.runs||[]).slice(0,3);
-      const m=s=>`${Math.floor(s/60)}分${String(s%60).padStart(2,'0')}秒`;
-      box.innerHTML=runs.map(x=>`<div>・${x.clips}本つなぎ：<b>${x.stage}</b>（${m(x.elapsed||0)}）${x.prompt2?'・2本目は別プロンプト':''}${x.error?'<br><span style="color:#ff6b6b">'+String(x.error).replace(/[<>&]/g,'')+'</span>':''}${x.done&&!x.error?'<br>履歴の「'+x.clips+'本つなぎ」が完成版です':''}</div>`).join('');
-      if(runs.some(x=>!x.done))timer=setTimeout(poll,10000);
+      if(r.ok){
+        const j=await r.json();
+        const runs=(j.runs||[]).slice(0,3);
+        const html=runs.map(x=>{
+          const tag=x.custom_prompts?`・別プロンプト${x.custom_prompts}本`:(x.prompt2?'・2本目以降は別プロンプト':'');
+          const done=x.done&&!x.error?'<br>履歴の「'+x.clips+'本つなぎ」が完成版です':'';
+          const err=x.error?'<br><span style="color:#ff6b6b">'+esc(x.error)+'</span>':'';
+          return `<div style="margin-top:4px">・${x.clips}本つなぎ：<b>${esc(x.stage)}</b>（${m(x.elapsed||0)}）${tag}${err}${done}</div>`;
+        }).join('');
+        document.querySelectorAll('.longStatus').forEach(b=>b.innerHTML=html);
+        const rc=document.getElementById('longRunCard');
+        if(rc)rc.classList.toggle('hidden',!runs.length);
+        timer=setTimeout(poll,runs.some(x=>!x.done)?8000:30000);
+      }
     }catch(e){timer=setTimeout(poll,20000);}
+    busy=false;
   }
 
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',card);else card();
