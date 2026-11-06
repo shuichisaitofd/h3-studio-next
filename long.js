@@ -11,19 +11,39 @@
   function store(k,v){try{localStorage.setItem(k,v);}catch(e){}}
   function load(k){try{return localStorage.getItem(k)||'';}catch(e){return '';}}
   function pid(){try{return (typeof getActiveProjectId==='function'&&getActiveProjectId())||'none';}catch(e){return 'none';}}
-  function pkey(name,id){return 'h3next.long.'+(id||pid())+'.'+name;}
-  // once: the old shared values (before per-project) go to the project that is open now
+  // The long settings live inside the 案件 (project) object as p.h3long = {clips, p2, p3},
+  // so they follow the 案件 and are included in 全設定バックアップ / 復元.
+  function projList(){try{return typeof getProjects==='function'?getProjects():[];}catch(e){return [];}}
+  function projGet(){const id=pid();const p=projList().find(x=>x.id===id);return (p&&p.h3long)||{};}
+  function projSet(patch){
+    try{
+      if(typeof saveProjects!=='function')return;
+      const id=pid(),list=projList(),p=list.find(x=>x.id===id);if(!p)return;
+      p.h3long=Object.assign({},p.h3long||{},patch);saveProjects(list);
+    }catch(e){}
+  }
+  // once: move the older storage (shared keys, then per-project keys) into the project objects
   function migrate(){
     try{
-      const old={clips:localStorage.getItem('h3next.longClips'),p2:localStorage.getItem('h3next.longPrompt2'),p3:localStorage.getItem('h3next.longPrompt3')};
-      if(old.clips==null&&old.p2==null&&old.p3==null)return;
-      for(const n of ['clips','p2','p3'])if(old[n]!=null&&localStorage.getItem(pkey(n))==null)localStorage.setItem(pkey(n),old[n]);
-      localStorage.removeItem('h3next.longClips');localStorage.removeItem('h3next.longPrompt2');localStorage.removeItem('h3next.longPrompt3');
+      if(typeof saveProjects!=='function')return;
+      const list=projList();let changed=false;const rm=[];
+      for(const p of list){
+        const k='h3next.long.'+p.id+'.';const c=localStorage.getItem(k+'clips'),a=localStorage.getItem(k+'p2'),b=localStorage.getItem(k+'p3');
+        if(c!=null||a!=null||b!=null){rm.push(k+'clips',k+'p2',k+'p3');if(!p.h3long){p.h3long={clips:parseInt(c||'0',10)||0,p2:a||'',p3:b||''};changed=true;}}
+      }
+      const oc=localStorage.getItem('h3next.longClips'),o2=localStorage.getItem('h3next.longPrompt2'),o3=localStorage.getItem('h3next.longPrompt3');
+      if(oc!=null||o2!=null||o3!=null){
+        rm.push('h3next.longClips','h3next.longPrompt2','h3next.longPrompt3');
+        const p=list.find(x=>x.id===pid());if(p&&!p.h3long){p.h3long={clips:parseInt(oc||'0',10)||0,p2:o2||'',p3:o3||''};changed=true;}
+      }
+      if(changed)saveProjects(list);
+      rm.forEach(k=>localStorage.removeItem(k));
     }catch(e){}
   }
   function loadProject(){
-    clips=parseInt(load(pkey('clips'))||'0',10)||0;
-    for(let n=2;n<=MAXP;n++){const t=document.getElementById('longPrompt'+n);if(t)t.value=load(pkey('p'+n));}
+    const h=projGet();
+    clips=parseInt(h.clips||0,10)||0;
+    for(let n=2;n<=MAXP;n++){const t=document.getElementById('longPrompt'+n);if(t)t.value=h['p'+n]||'';}
     paint();
   }
 
@@ -48,18 +68,18 @@
     genCard.parentNode.insertBefore(c,genCard);
     c.querySelectorAll('[data-long]').forEach(b=>b.addEventListener('click',()=>{
       clips=parseInt(b.dataset.long,10)||0;
-      store(pkey('clips'),String(clips));
+      projSet({clips});
       paint();
     }));
     for(let n=2;n<=MAXP;n++){
       const t=document.getElementById('longPrompt'+n);
-      t.addEventListener('input',()=>store(pkey('p'+n),t.value));
+      t.addEventListener('input',()=>projSet({['p'+n]:t.value}));
     }
     migrate();
     loadProject();
     window.addEventListener('h3:project-changed',e=>{setTimeout(loadProject,0);});
     runCard();
-    setTimeout(()=>{loadProject();try{if(typeof apiUrl==='function'){lastBase=apiUrl('');poll();}}catch(e){}},1500);
+    setTimeout(()=>{migrate();loadProject();try{if(typeof apiUrl==='function'){lastBase=apiUrl('');poll();}}catch(e){}},1500);
   }
 
   function runCard(){
@@ -144,12 +164,35 @@
   const PART_RE=/filename=[^&]*_part\d+_\d+_\.mp4(&|$)/;
   function base(){try{return typeof apiUrl==='function'?apiUrl(''):lastBase;}catch(e){return lastBase;}}
   function viewUrl(f){return base()+`/view?filename=${encodeURIComponent(f.filename)}&subfolder=${encodeURIComponent(f.subfolder||'')}&type=${encodeURIComponent(f.type||'output')}`;}
+  const PARTS_DIR_RE=/subfolder=video%2Fh3long%2Fparts(&|$)/;
+  function srcFile(src){try{return new URL(src,location.href).searchParams.get('filename')||'';}catch(e){return '';}}
+  let partsCache=null,partsAt=0;
+  async function partsData(){
+    if(partsCache&&Date.now()-partsAt<15000)return partsCache;
+    const r=await origFetch(base()+'/h3-mobile/api/long/parts',{cache:'no-store'});
+    if(!r.ok)return null;partsCache=(await r.json()).runs||[];partsAt=Date.now();return partsCache;
+  }
+  function fmtSec(s){s=Math.max(0,Math.round(s||0));const h=Math.floor(s/3600),m=Math.floor(s%3600/60),x=s%60;return (h?h+'時間':'')+(h||m?m+'分':'')+x+'秒';}
+  async function markJoined(cards){
+    if(longApi!==true||!cards.length)return;
+    let runs;try{runs=await partsData();}catch(e){return;}if(!runs)return;
+    const byFile={};runs.forEach(r=>{if(r.joined&&r.elapsed)byFile[r.joined.filename]=r;});
+    cards.forEach(c=>{
+      const m=c.querySelector('.history-media');const run=byFile[srcFile(m&&m.getAttribute('src')||'')];if(!run)return;
+      const txt='生成 '+fmtSec(run.elapsed)+'（'+run.clips+'本の合計）';
+      let sp=c.querySelector('.duration-good');
+      if(!sp){const meta=c.querySelector('.meta');if(!meta)return;sp=document.createElement('span');sp.className='duration-good';meta.appendChild(sp);}
+      if(sp.textContent!==txt)sp.textContent=txt;
+    });
+  }
   function hideParts(){
     const root=document.getElementById('historyList');if(!root)return;
-    root.querySelectorAll('.history-card').forEach(c=>{
+    const cards=[...root.querySelectorAll('.history-card')];
+    cards.forEach(c=>{
       const m=c.querySelector('.history-media');const src=(m&&(m.getAttribute('src')||''))||'';
-      if(PART_RE.test(src))c.classList.add('hidden');
+      if(PART_RE.test(src)||PARTS_DIR_RE.test(src))c.classList.add('hidden');
     });
+    markJoined(cards.filter(c=>!c.classList.contains('hidden')));
   }
   function partsUi(){
     const tools=document.querySelector('section[data-page="history"] .history-tools');
