@@ -5,7 +5,8 @@
 (function () {
   var RELAY = 'https://shuichisaitofd--h3-modal-web.us-east.modal.run/h3modal/runpod';
   var IMAGE = 'ghcr.io/shuichisaitofd/runpod-h3-mobile:h3-longtest-0978eb3f2e9e0ccca76848d1081bbac98ffba145';
-  var GPUS = [['NVIDIA RTX A6000', 'A6000（$0.59/時・ふつう）'], ['NVIDIA L40S', 'L40S（$1.12/時・速い）']];
+  var GPUS = [['both', 'どちらでも（先に空いた方）'], ['NVIDIA RTX A6000', 'A6000（$0.59/時・ふつう）'], ['NVIDIA L40S', 'L40S（$1.12/時・速い）']];
+  var WATCH_MS = 5 * 60000, RETRY_MS = 10000;
   var PENDING_KEY = 'h3nextRunpodPending';
   var GPU_KEY = 'h3nextRunpodGpu';
 
@@ -84,25 +85,55 @@
       });
   }
 
-  function start() {
-    if (load(PENDING_KEY, null)) { msg('いま起動中の Pod があります。終わるまで待ってください。'); return; }
-    var gpu = sel.value;
-    save(GPU_KEY, gpu);
-    btn.disabled = true;
-    msg('Pod を作っています…');
+  // Try to create a Pod; when there is no free GPU, keep trying every 10 s for 5 minutes (while this page is open).
+  var watching = null;
+  function stopWatch(text) {
+    if (watching && watching.t) clearTimeout(watching.t);
+    watching = null;
+    btn.textContent = '起動';
+    if (text) msg(text);
+  }
+  function tryOnce() {
+    if (!watching) return;
+    var w = watching;
+    var gpu = w.order[w.n % w.order.length];
+    w.n++;
     relay('/create', { gpu: gpu, image: IMAGE, name: 'h3-' + gpuLabel(gpu).toLowerCase() })
       .then(function (d) {
+        if (watching !== w) return;
+        stopWatch();
         save(PENDING_KEY, { id: d.id, gpu: gpu, started: Date.now() });
-        msg('Pod を作りました（' + d.id + '）。起動を待っています…');
+        msg(gpuLabel(gpu) + ' を確保しました（' + d.id + '）。起動を待っています…');
         refreshList();
         if (!timer) poll();
       })
       .catch(function (e) {
+        if (watching !== w) return;
         var t = String(e.message || e);
-        if (/no (longer any|instances)|capacity|available/i.test(t)) t = 'いまは ' + gpuLabel(gpu) + ' に空きがありません。別の GPU か、少し時間をおいて試してください。（' + t + '）';
-        msg('起動できませんでした: ' + t);
-      })
-      .then(function () { btn.disabled = false; });
+        if (!/no (longer any|available)|instances available|not available|capacity|insufficient/i.test(t)) {
+          stopWatch('起動できませんでした: ' + t);
+          return;
+        }
+        var left = WATCH_MS - (Date.now() - w.started);
+        if (left <= 0) {
+          stopWatch('5分間、空きがありませんでした。もう一度「起動」を押すと、また5分見張ります。');
+          return;
+        }
+        var s = Math.ceil(left / 1000);
+        msg('空き待ち…（' + w.order.map(gpuLabel).join(' / ') + '、' + w.n + '回目、残り ' + Math.floor(s / 60) + '分' + (s % 60) + '秒）。この画面を開いたままにしてください。');
+        w.t = setTimeout(tryOnce, RETRY_MS);
+      });
+  }
+  function start() {
+    if (watching) { stopWatch('見張りをやめました。'); return; }
+    if (load(PENDING_KEY, null)) { msg('いま起動中の Pod があります。終わるまで待ってください。'); return; }
+    var choice = sel.value;
+    save(GPU_KEY, choice);
+    var order = choice === 'both' ? ['NVIDIA RTX A6000', 'NVIDIA L40S'] : [choice];
+    watching = { order: order, n: 0, started: Date.now(), t: null };
+    btn.textContent = 'やめる';
+    msg('Pod を作っています…');
+    tryOnce();
   }
 
   function del(p) {
@@ -152,7 +183,7 @@
     card = document.createElement('div');
     card.className = 'card'; card.id = 'nxRunpodCard';
     card.innerHTML = '<h2>RunPod をワンタップで起動（テスト）</h2>' +
-      '<div class="small">GPU を選んで「起動」を押すと、Pod を作って、準備ができたら自動で登録・切り替えします。使い終わったら下の一覧で「削除」を押してください（削除するまでお金がかかります）。</div>' +
+      '<div class="small">GPU を選んで「起動」を押すと、Pod を作って、準備ができたら自動で登録・切り替えします。空きがないときは、5分間見張って空いたら確保します。使い終わったら下の一覧で「削除」を押してください（削除するまでお金がかかります）。</div>' +
       '<div style="display:flex;gap:8px;margin-top:10px"><select id="nxRpGpu" style="flex:1"></select><button id="nxRpStart">起動</button></div>' +
       '<div class="small" id="nxRpMsg" style="margin-top:8px"></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px"><b style="font-size:14px">動いている Pod</b><button class="secondary" id="nxRpReload">更新</button></div>' +
