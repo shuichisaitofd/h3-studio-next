@@ -1,5 +1,5 @@
 /* H3 Studio β: one-tap RunPod start / delete.
-   Uses the RunPod API key already saved for the balance display (設定 → 残高).
+   Uses its own RunPod API key (saved without a Pod), or else the key saved for the balance display.
    The phone cannot call the RunPod API directly (CORS), so requests go through the H3 Modal page server,
    which passes them on and keeps nothing. */
 (function () {
@@ -12,7 +12,9 @@
   function q(s) { return document.querySelector(s); }
   function load(k, d) { try { var v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch (e) { return d; } }
   function save(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} }
+  var OWN_KEY = 'h3nextRunpodKey';
   function apiKey() {
+    try { var own = localStorage.getItem(OWN_KEY); if (own) return own; } catch (e) {}
     var list = load('h3RunPodBillingAccountsV1', []);
     if (!Array.isArray(list) || !list.length) return '';
     var id = localStorage.getItem('h3RunPodBillingActiveAccountV1');
@@ -21,7 +23,7 @@
   }
   function relay(path, body) {
     body.key = apiKey();
-    if (!body.key) return Promise.reject(new Error('API キーがありません（設定の「残高」で RunPod の API キーを登録してください）'));
+    if (!body.key) return Promise.reject(new Error('API キーがありません（このカードの「API キー」に RunPod の API キーを入れて「保存」を押してください）'));
     return fetch(RELAY + path, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body), cache: 'no-store' })
       .then(function (r) { return r.json(); })
       .then(function (d) { if (!d.ok) throw new Error(d.error || '失敗しました'); return d; });
@@ -161,7 +163,7 @@
 
   function refreshList() {
     if (!listEl) return;
-    if (!apiKey()) { listEl.innerHTML = '<div class="small">設定の「残高」で RunPod の API キーを登録すると使えます。</div>'; return; }
+    if (!apiKey()) { listEl.innerHTML = '<div class="small">上の「API キー」に RunPod の API キーを入れて「保存」を押すと使えます。</div>'; return; }
     relay('/pods', {})
       .then(function (d) {
         listEl.innerHTML = '';
@@ -195,6 +197,7 @@
       '<div class="small">GPU を選んで「起動」を押すと、Pod を作って、準備ができたら自動で登録・切り替えします。空きがないときは、5分間見張って空いたら確保します（画面を閉じても見張ります）。使い終わったら下の一覧で「削除」を押してください（削除するまでお金がかかります）。</div>' +
       '<div style="display:flex;gap:8px;margin-top:10px"><select id="nxRpGpu" style="flex:1"></select><button id="nxRpStart">起動</button></div>' +
       '<div style="display:flex;gap:8px;margin-top:8px;align-items:center"><span class="small" style="white-space:nowrap">通知（ntfy）</span><input id="nxRpNtfy" type="password" autocomplete="off" placeholder="トピック名（空欄なら通知なし）" style="flex:1;min-width:0"></div>' +
+      '<div style="display:flex;gap:8px;margin-top:8px;align-items:center"><span class="small" style="white-space:nowrap">API キー</span><input id="nxRpKey" type="password" autocomplete="off" placeholder="RunPod の API キー（All）" style="flex:1;min-width:0"><button class="secondary" id="nxRpKeySave">保存</button></div>' +
       '<div class="small" id="nxRpMsg" style="margin-top:8px"></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px"><b style="font-size:14px">動いている Pod</b><button class="secondary" id="nxRpReload">更新</button></div>' +
       '<div id="nxRpList" style="margin-top:4px"></div>';
@@ -204,6 +207,23 @@
     GPUS.forEach(function (g) { var o = document.createElement('option'); o.value = g[0]; o.textContent = g[1]; sel.appendChild(o); });
     var last = load(GPU_KEY, null); if (last) sel.value = last;
     btn.onclick = start;
+    var kin = q('#nxRpKey');
+    try { if (localStorage.getItem(OWN_KEY)) kin.placeholder = '登録済み（変えるときだけ入力）'; } catch (e) {}
+    q('#nxRpKeySave').onclick = function () {
+      var v = kin.value.trim();
+      if (!v) { msg('API キーを入れてください。'); return; }
+      msg('キーを確認しています…');
+      fetch(RELAY + '/pods', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ key: v }), cache: 'no-store' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          if (!d.ok) throw new Error(d.error || '確認できませんでした');
+          try { localStorage.setItem(OWN_KEY, v); } catch (e) {}
+          kin.value = ''; kin.placeholder = '登録済み（変えるときだけ入力）';
+          msg('API キーを保存しました（Pod がなくても登録できます）。');
+          refreshList();
+        })
+        .catch(function (e) { msg('このキーは使えませんでした: ' + (e.message || e)); });
+    };
     var nt = q('#nxRpNtfy');
     try { nt.value = localStorage.getItem(NTFY_KEY) || ''; } catch (e) {}
     nt.onchange = function () { try { localStorage.setItem(NTFY_KEY, nt.value.trim()); } catch (e) {} };
