@@ -4,9 +4,8 @@
    which passes them on and keeps nothing. */
 (function () {
   var RELAY = 'https://shuichisaitofd--h3-modal-web.us-east.modal.run/h3modal/runpod';
-  var IMAGE = 'ghcr.io/shuichisaitofd/runpod-h3-mobile:h3-longtest-0978eb3f2e9e0ccca76848d1081bbac98ffba145';
+  var IMAGE = 'ghcr.io/shuichisaitofd/runpod-h3-mobile:h3-longtest-599587cfb064c01b806e951192d8b7b6bc66776d';
   var GPUS = [['both', 'どちらでも（先に空いた方）'], ['NVIDIA RTX A6000', 'A6000（$0.59/時・ふつう）'], ['NVIDIA L40S', 'L40S（$1.12/時・速い）']];
-  var WATCH_MS = 5 * 60000, RETRY_MS = 10000;
   var PENDING_KEY = 'h3nextRunpodPending';
   var GPU_KEY = 'h3nextRunpodGpu';
 
@@ -85,55 +84,65 @@
       });
   }
 
-  // Try to create a Pod; when there is no free GPU, keep trying every 10 s for 5 minutes (while this page is open).
-  var watching = null;
-  function stopWatch(text) {
-    if (watching && watching.t) clearTimeout(watching.t);
-    watching = null;
-    btn.textContent = '起動';
-    if (text) msg(text);
-  }
-  function tryOnce() {
-    if (!watching) return;
-    var w = watching;
-    var gpu = w.order[w.n % w.order.length];
-    w.n++;
-    relay('/create', { gpu: gpu, image: IMAGE, name: 'h3-' + gpuLabel(gpu).toLowerCase() })
+  // The watch runs on the Modal server (5 minutes, every 10 s), so this page can be closed.
+  // The watch id is kept in this browser; when the page opens again it picks up the result.
+  var WATCH_KEY = 'h3nextRunpodWatch', NTFY_KEY = 'h3nextNtfyTopic';
+  var wtimer = null;
+  function setBtn() { btn.textContent = load(WATCH_KEY, null) ? 'やめる' : '起動'; }
+  function watchPoll() {
+    wtimer = null;
+    var w = load(WATCH_KEY, null);
+    setBtn();
+    if (!w) return;
+    fetch(RELAY + '/watch-status', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ watch: w.id }), cache: 'no-store' })
+      .then(function (r) { return r.json(); })
       .then(function (d) {
-        if (watching !== w) return;
-        stopWatch();
-        save(PENDING_KEY, { id: d.id, gpu: gpu, started: Date.now() });
-        msg(gpuLabel(gpu) + ' を確保しました（' + d.id + '）。起動を待っています…');
-        refreshList();
-        if (!timer) poll();
+        if (!d.ok) throw new Error(d.error || 'status');
+        if (d.status === 'ok') {
+          save(WATCH_KEY, null); setBtn();
+          if (!load(PENDING_KEY, null)) save(PENDING_KEY, { id: d.id, gpu: d.gpu, started: (d.at || Date.now() / 1000) * 1000 });
+          msg(gpuLabel(d.gpu) + ' を確保しました（' + d.id + '）。起動を待っています…');
+          refreshList();
+          if (!timer) poll();
+          return;
+        }
+        if (d.status === 'timeout') { save(WATCH_KEY, null); setBtn(); msg('5分間、空きがありませんでした。もう一度「起動」を押すと、また5分見張ります。'); return; }
+        if (d.status === 'stopped') { save(WATCH_KEY, null); setBtn(); msg('見張りをやめました。'); return; }
+        if (d.status === 'error') { save(WATCH_KEY, null); setBtn(); msg('起動できませんでした: ' + (d.error || '')); return; }
+        var left = Math.max(0, Math.ceil(300 - (Date.now() / 1000 - d.started)));
+        msg('空き待ち…（' + (d.gpus || []).map(gpuLabel).join(' / ') + '、' + (d.tries || 0) + '回目、残り約' + Math.floor(left / 60) + '分' + (left % 60) + '秒）。この画面は閉じても大丈夫です。');
+        wtimer = setTimeout(watchPoll, 10000);
       })
       .catch(function (e) {
-        if (watching !== w) return;
-        var t = String(e.message || e);
-        if (!/no (longer any|available)|instances available|not available|capacity|insufficient/i.test(t)) {
-          stopWatch('起動できませんでした: ' + t);
-          return;
-        }
-        var left = WATCH_MS - (Date.now() - w.started);
-        if (left <= 0) {
-          stopWatch('5分間、空きがありませんでした。もう一度「起動」を押すと、また5分見張ります。');
-          return;
-        }
-        var s = Math.ceil(left / 1000);
-        msg('空き待ち…（' + w.order.map(gpuLabel).join(' / ') + '、' + w.n + '回目、残り ' + Math.floor(s / 60) + '分' + (s % 60) + '秒）。この画面を開いたままにしてください。');
-        w.t = setTimeout(tryOnce, RETRY_MS);
+        if (Date.now() - w.at > 8 * 60000) { save(WATCH_KEY, null); setBtn(); msg('見張りの結果がわかりませんでした。下の一覧を確認してください。'); refreshList(); return; }
+        wtimer = setTimeout(watchPoll, 10000);
       });
   }
   function start() {
-    if (watching) { stopWatch('見張りをやめました。'); return; }
+    var w = load(WATCH_KEY, null);
+    if (w) {
+      fetch(RELAY + '/watch-stop', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ watch: w.id }) }).catch(function () {});
+      msg('見張りを止めています…');
+      if (!wtimer) watchPoll();
+      return;
+    }
     if (load(PENDING_KEY, null)) { msg('いま起動中の Pod があります。終わるまで待ってください。'); return; }
     var choice = sel.value;
     save(GPU_KEY, choice);
     var order = choice === 'both' ? ['NVIDIA RTX A6000', 'NVIDIA L40S'] : [choice];
-    watching = { order: order, n: 0, started: Date.now(), t: null };
-    btn.textContent = 'やめる';
-    msg('Pod を作っています…');
-    tryOnce();
+    btn.disabled = true;
+    msg('見張りを始めています…');
+    var topic = '';
+    try { topic = localStorage.getItem(NTFY_KEY) || ''; } catch (e) {}
+    relay('/watch', { gpus: order, image: IMAGE, ntfy: topic })
+      .then(function (d) {
+        save(WATCH_KEY, { id: d.watch, at: Date.now() });
+        setBtn();
+        msg('見張りを始めました。この画面は閉じても大丈夫です。');
+        if (!wtimer) wtimer = setTimeout(watchPoll, 3000);
+      })
+      .catch(function (e) { msg('始められませんでした: ' + (e.message || e)); })
+      .then(function () { btn.disabled = false; });
   }
 
   function del(p) {
@@ -183,8 +192,9 @@
     card = document.createElement('div');
     card.className = 'card'; card.id = 'nxRunpodCard';
     card.innerHTML = '<h2>RunPod をワンタップで起動（テスト）</h2>' +
-      '<div class="small">GPU を選んで「起動」を押すと、Pod を作って、準備ができたら自動で登録・切り替えします。空きがないときは、5分間見張って空いたら確保します。使い終わったら下の一覧で「削除」を押してください（削除するまでお金がかかります）。</div>' +
+      '<div class="small">GPU を選んで「起動」を押すと、Pod を作って、準備ができたら自動で登録・切り替えします。空きがないときは、5分間見張って空いたら確保します（画面を閉じても見張ります）。使い終わったら下の一覧で「削除」を押してください（削除するまでお金がかかります）。</div>' +
       '<div style="display:flex;gap:8px;margin-top:10px"><select id="nxRpGpu" style="flex:1"></select><button id="nxRpStart">起動</button></div>' +
+      '<div style="display:flex;gap:8px;margin-top:8px;align-items:center"><span class="small" style="white-space:nowrap">通知（ntfy）</span><input id="nxRpNtfy" type="password" autocomplete="off" placeholder="トピック名（空欄なら通知なし）" style="flex:1;min-width:0"></div>' +
       '<div class="small" id="nxRpMsg" style="margin-top:8px"></div>' +
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px"><b style="font-size:14px">動いている Pod</b><button class="secondary" id="nxRpReload">更新</button></div>' +
       '<div id="nxRpList" style="margin-top:4px"></div>';
@@ -194,6 +204,11 @@
     GPUS.forEach(function (g) { var o = document.createElement('option'); o.value = g[0]; o.textContent = g[1]; sel.appendChild(o); });
     var last = load(GPU_KEY, null); if (last) sel.value = last;
     btn.onclick = start;
+    var nt = q('#nxRpNtfy');
+    try { nt.value = localStorage.getItem(NTFY_KEY) || ''; } catch (e) {}
+    nt.onchange = function () { try { localStorage.setItem(NTFY_KEY, nt.value.trim()); } catch (e) {} };
+    setBtn();
+    if (load(WATCH_KEY, null) && !wtimer) watchPoll();
     q('#nxRpReload').onclick = refreshList;
     refreshList();
     if (load(PENDING_KEY, null) && !timer) poll();
