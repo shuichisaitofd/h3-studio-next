@@ -3,7 +3,20 @@
    The phone cannot call the RunPod API directly (CORS), so requests go through the H3 Modal page server,
    which passes them on and keeps nothing. */
 (function () {
-  var RELAY = 'https://shuichisaitofd--h3-modal-web.us-east.modal.run/h3modal/runpod';
+  // Two Modal accounts: if the first one is out of credits or down, the second one passes the requests on.
+  var RELAYS = ['https://shuichisaitofd--h3-modal-web.us-east.modal.run/h3modal/runpod',
+                'https://saitopod25--h3-modal-web.us-east.modal.run/h3modal/runpod'];
+  var RELAY = RELAYS[0];
+  function rpost(path, body, base) {
+    var list = base ? [base] : RELAYS.slice();
+    function go(i) {
+      return fetch(list[i] + path, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body), cache: 'no-store' })
+        .then(function (r) { if (r.status >= 500 || r.status === 402 || r.status === 429) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (d) { d._base = list[i]; return d; })
+        .catch(function (e) { if (i + 1 < list.length) return go(i + 1); throw e; });
+    }
+    return go(0);
+  }
   var IMAGE = 'ghcr.io/shuichisaitofd/runpod-h3-mobile:h3-longtest-468f6718e9ad186e8ad164c3f0c4f8509355536e';
   var GPUS = [['both', 'どちらでも（先に空いた方）'], ['NVIDIA RTX A6000', 'A6000（$0.59/時・ふつう）'], ['NVIDIA L40S', 'L40S（$1.12/時・速い）']];
   var PENDING_KEY = 'h3nextRunpodPending';
@@ -24,8 +37,7 @@
   function relay(path, body) {
     body.key = apiKey();
     if (!body.key) return Promise.reject(new Error('API キーがありません（このカードの「API キー」に RunPod の API キーを入れて「保存」を押してください）'));
-    return fetch(RELAY + path, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body), cache: 'no-store' })
-      .then(function (r) { return r.json(); })
+    return rpost(path, body)
       .then(function (d) { if (!d.ok) throw new Error(d.error || '失敗しました'); return d; });
   }
   function podUrl(id) { return 'https://' + id + '-8188.proxy.runpod.net'; }
@@ -115,8 +127,7 @@
     var w = load(WATCH_KEY, null);
     setBtn();
     if (!w) return;
-    fetch(RELAY + '/watch-status', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ watch: w.id }), cache: 'no-store' })
-      .then(function (r) { return r.json(); })
+    rpost('/watch-status', { watch: w.id }, w.base || RELAY)
       .then(function (d) {
         if (!d.ok) throw new Error(d.error || 'status');
         if (d.status === 'ok') {
@@ -142,7 +153,7 @@
   function start() {
     var w = load(WATCH_KEY, null);
     if (w) {
-      fetch(RELAY + '/watch-stop', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ watch: w.id }) }).catch(function () {});
+      rpost('/watch-stop', { watch: w.id }, w.base || RELAY).catch(function () {});
       msg('見張りを止めています…');
       if (!wtimer) watchPoll();
       return;
@@ -157,7 +168,7 @@
     try { topic = localStorage.getItem(NTFY_KEY) || ''; } catch (e) {}
     relay('/watch', { gpus: order, image: IMAGE, ntfy: topic })
       .then(function (d) {
-        save(WATCH_KEY, { id: d.watch, at: Date.now() });
+        save(WATCH_KEY, { id: d.watch, at: Date.now(), base: d._base });
         setBtn();
         msg('見張りを始めました。この画面は閉じても大丈夫です。');
         if (!wtimer) wtimer = setTimeout(watchPoll, 3000);
@@ -242,8 +253,7 @@
       var v = kin.value.trim();
       if (!v) { msg('API キーを入れてください。'); return; }
       msg('キーを確認しています…');
-      fetch(RELAY + '/pods', { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify({ key: v }), cache: 'no-store' })
-        .then(function (r) { return r.json(); })
+      rpost('/pods', { key: v })
         .then(function (d) {
           if (!d.ok) throw new Error(d.error || '確認できませんでした');
           try { localStorage.setItem(OWN_KEY, v); } catch (e) {}
