@@ -4,7 +4,7 @@
    which passes them on and keeps nothing. */
 (function () {
   var RELAY = 'https://shuichisaitofd--h3-modal-web.us-east.modal.run/h3modal/runpod';
-  var IMAGE = 'ghcr.io/shuichisaitofd/runpod-h3-mobile:h3-longtest-599587cfb064c01b806e951192d8b7b6bc66776d';
+  var IMAGE = 'ghcr.io/shuichisaitofd/runpod-h3-mobile:h3-longtest-468f6718e9ad186e8ad164c3f0c4f8509355536e';
   var GPUS = [['both', 'どちらでも（先に空いた方）'], ['NVIDIA RTX A6000', 'A6000（$0.59/時・ふつう）'], ['NVIDIA L40S', 'L40S（$1.12/時・速い）']];
   var PENDING_KEY = 'h3nextRunpodPending';
   var GPU_KEY = 'h3nextRunpodGpu';
@@ -40,7 +40,7 @@
     var url = podUrl(p.id);
     var have = pods.filter(function (x) { return x.baseUrl === url; })[0];
     if (!have) {
-      have = { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), name: 'RunPod ' + gpuLabel(p.gpu) + ' ' + p.id, baseUrl: url, runpodId: p.id };
+      have = { id: crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random(), name: (p.name || ('RunPod ' + (p.gpu ? gpuLabel(p.gpu) : ''))) + ' ' + p.id, baseUrl: url, runpodId: p.id };
       pods.push(have);
       savePods(pods);
     }
@@ -57,6 +57,25 @@
     savePods(left);
     var active = typeof getActivePod === 'function' ? getActivePod() : null;
     if (!active && typeof setActivePod === 'function') setActivePod(left.length ? left[0].id : null);
+    if (typeof renderPods === 'function') renderPods();
+    if (typeof reconnectPod === 'function') reconnectPod();
+  }
+
+  function cleanStale(list) {
+    if (typeof getPods !== 'function' || typeof savePods !== 'function') return;
+    var alive = {};
+    list.forEach(function (p) { alive[p.id] = true; });
+    var pend = load(PENDING_KEY, null);
+    var pods = getPods();
+    var left = pods.filter(function (x) {
+      var m = /^https:\/\/([a-z0-9]+)-8188\.proxy\.runpod\.net/.exec(x.baseUrl || '');
+      var rid = x.runpodId || (m && m[1]);
+      return !rid || alive[rid] || (pend && pend.id === rid);
+    });
+    if (left.length === pods.length) return;
+    savePods(left);
+    var act = typeof getActivePod === 'function' ? getActivePod() : null;
+    if (!act && typeof setActivePod === 'function') setActivePod(left.length ? left[0].id : null);
     if (typeof renderPods === 'function') renderPods();
     if (typeof reconnectPod === 'function') reconnectPod();
   }
@@ -167,6 +186,7 @@
     relay('/pods', {})
       .then(function (d) {
         listEl.innerHTML = '';
+        cleanStale(d.pods);
         if (!d.pods.length) { listEl.innerHTML = '<div class="small">動いている Pod はありません（お金はかかっていません）。</div>'; return; }
         d.pods.forEach(function (p) {
           var row = document.createElement('div');
@@ -174,12 +194,21 @@
           row.style.cssText = 'display:flex;align-items:center;gap:8px;margin:6px 0';
           var info = document.createElement('div');
           info.style.cssText = 'flex:1;min-width:0;font-size:13px';
-          info.textContent = (p.name || p.id) + ' / ' + (p.gpu || '') + ' / ' + (p.desiredStatus || '') + (p.costPerHr != null ? ' / $' + Number(p.costPerHr).toFixed(2) + '/時' : '');
+          var gname = p.gpu || (p.costPerHr != null ? (Number(p.costPerHr) < 0.8 ? 'A6000' : 'L40S') : '');
+          var active = (typeof getActivePod === 'function') && getActivePod() && getActivePod().baseUrl === podUrl(p.id);
+          info.textContent = (p.name || p.id) + ' / ' + gname + ' / ' + (p.desiredStatus || '') + (p.costPerHr != null ? ' / $' + Number(p.costPerHr).toFixed(2) + '/時' : '') + (active ? ' / 使用中' : '');
+          if (!active && p.desiredStatus === 'RUNNING') {
+            var c = document.createElement('button');
+            c.textContent = '接続';
+            c.onclick = function () { registerPod(p); msg('「' + (p.name || p.id) + '」に切り替えました。準備中のときは、使えるまで数分かかります。'); refreshList(); };
+            row.appendChild(info);
+            row.appendChild(c);
+          }
           var b = document.createElement('button');
           b.className = 'secondary';
           b.textContent = '削除';
           b.onclick = function () { del(p); };
-          row.appendChild(info);
+          if (!info.parentNode) row.appendChild(info);
           row.appendChild(b);
           listEl.appendChild(row);
         });
