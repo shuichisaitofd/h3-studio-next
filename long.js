@@ -15,12 +15,23 @@
   // so they follow the 案件 and are included in 全設定バックアップ / 復元.
   function projList(){try{return typeof getProjects==='function'?getProjects():[];}catch(e){return [];}}
   function projGet(){const id=pid();const p=projList().find(x=>x.id===id);return (p&&p.h3long)||{};}
+  // Second copy in IndexedDB (much larger quota than localStorage). On phones the 案件 list in
+  // localStorage can hit the ~5MB limit with long prompts; then saving there fails silently and
+  // the 2本目/3本目 prompts were gone after reopening the app.
+  function idb(){return new Promise((res,rej)=>{const r=indexedDB.open('h3next-long',1);r.onupgradeneeded=()=>r.result.createObjectStore('p');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
+  async function idbPut(k,v){try{const db=await idb();await new Promise((res,rej)=>{const tx=db.transaction('p','readwrite');tx.objectStore('p').put(v,k);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}catch(e){}}
+  async function idbGet(k){try{const db=await idb();return await new Promise(res=>{const r=db.transaction('p').objectStore('p').get(k);r.onsuccess=()=>res(r.result||null);r.onerror=()=>res(null);});}catch(e){return null;}}
+  let cur={},saveFail=false;
   function projSet(patch){
+    const id=pid();
+    cur=Object.assign({},cur,patch,{t:Date.now()});
+    idbPut(id,cur);
     try{
       if(typeof saveProjects!=='function')return;
-      const id=pid(),list=projList(),p=list.find(x=>x.id===id);if(!p)return;
-      p.h3long=Object.assign({},p.h3long||{},patch);saveProjects(list);
-    }catch(e){}
+      const list=projList(),p=list.find(x=>x.id===id);if(!p)return;
+      p.h3long=Object.assign({},p.h3long||{},cur);saveProjects(list);
+      if(saveFail){saveFail=false;paint();}
+    }catch(e){if(!saveFail){saveFail=true;paint();}}
   }
   // once: move the older storage (shared keys, then per-project keys) into the project objects
   function migrate(){
@@ -40,8 +51,13 @@
       rm.forEach(k=>localStorage.removeItem(k));
     }catch(e){}
   }
-  function loadProject(){
-    const h=projGet();
+  async function loadProject(){
+    const id=pid();
+    let h=projGet();
+    const b=await idbGet(id);
+    if(id!==pid())return;
+    if(b&&(b.t||0)>(h.t||0))h=b;
+    cur=Object.assign({},h);
     clips=parseInt(h.clips||0,10)||0;
     for(let n=2;n<=MAXP;n++){const t=document.getElementById('longPrompt'+n);if(t)t.value=h['p'+n]||'';}
     paint();
@@ -73,7 +89,7 @@
     }));
     for(let n=2;n<=MAXP;n++){
       const t=document.getElementById('longPrompt'+n);
-      t.addEventListener('input',()=>projSet({['p'+n]:t.value}));
+      ['input','change','blur'].forEach(ev=>t.addEventListener(ev,()=>{if((cur['p'+n]||'')!==t.value)projSet({['p'+n]:t.value});}));
     }
     migrate();
     loadProject();
@@ -96,7 +112,7 @@
     document.querySelectorAll('#longCard .longPWrap').forEach(w=>w.classList.toggle('hidden',clips<(parseInt(w.dataset.n,10)||99)));
     const note=document.getElementById('longNote');if(!note)return;
     const sec=parseFloat((document.getElementById('sec')||{}).value)||0;
-    note.textContent=clips?`画像から動画のみ。秒数×${clips}本 ≒ ${Math.round(sec*clips)}秒の動画を自動でつなぎます（時間も約${clips}倍）。テスト用Podが必要です。`:'OFF：いつもどおり1本だけ作ります。';
+    note.textContent=(saveFail?'⚠ この端末の保存容量がいっぱいで案件には保存できませんでした（端末内の予備には保存しています）。':'')+(clips?`画像から動画のみ。秒数×${clips}本 ≒ ${Math.round(sec*clips)}秒の動画を自動でつなぎます（時間も約${clips}倍）。テスト用Podが必要です。`:'OFF：いつもどおり1本だけ作ります。');
   }
 
   document.addEventListener('input',e=>{if(e.target&&e.target.id==='sec')paint();});
