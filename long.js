@@ -15,23 +15,53 @@
   // so they follow the 案件 and are included in 全設定バックアップ / 復元.
   function projList(){try{return typeof getProjects==='function'?getProjects():[];}catch(e){return [];}}
   function projGet(){const id=pid();const p=projList().find(x=>x.id===id);return (p&&p.h3long)||{};}
-  // Second copy in IndexedDB (much larger quota than localStorage). On phones the 案件 list in
-  // localStorage can hit the ~5MB limit with long prompts; then saving there fails silently and
-  // the 2本目/3本目 prompts were gone after reopening the app.
+  // The 2本目/3本目 prompts live in IndexedDB ('h3next-long', key = 案件 id), not in localStorage.
+  // On phones localStorage (~5MB, shared with the 本番 H3 Studio on the same site) filled up with
+  // long prompts; then every save failed (prompts lost, LoRA / 案件追加 buttons stopped working).
+  // The 案件 object keeps only h3long = {clips, t}.
   function idb(){return new Promise((res,rej)=>{const r=indexedDB.open('h3next-long',1);r.onupgradeneeded=()=>r.result.createObjectStore('p');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
-  async function idbPut(k,v){try{const db=await idb();await new Promise((res,rej)=>{const tx=db.transaction('p','readwrite');tx.objectStore('p').put(v,k);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});}catch(e){}}
+  async function idbPut(k,v){try{const db=await idb();await new Promise((res,rej)=>{const tx=db.transaction('p','readwrite');tx.objectStore('p').put(v,k);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});return true;}catch(e){return false;}}
   async function idbGet(k){try{const db=await idb();return await new Promise(res=>{const r=db.transaction('p').objectStore('p').get(k);r.onsuccess=()=>res(r.result||null);r.onerror=()=>res(null);});}catch(e){return null;}}
   let cur={},saveFail=false;
   function projSet(patch){
     const id=pid();
     cur=Object.assign({},cur,patch,{t:Date.now()});
     idbPut(id,cur);
+    if(!('clips' in patch))return; // prompts: IndexedDB only
     try{
       if(typeof saveProjects!=='function')return;
       const list=projList(),p=list.find(x=>x.id===id);if(!p)return;
-      p.h3long=Object.assign({},p.h3long||{},cur);saveProjects(list);
+      p.h3long={clips:cur.clips||0,t:cur.t};saveProjects(list);
       if(saveFail){saveFail=false;paint();}
     }catch(e){if(!saveFail){saveFail=true;paint();}}
+  }
+  // once per load: copy prompts still inside the 案件 objects to IndexedDB, then remove them there
+  async function slim(){
+    try{
+      if(typeof saveProjects!=='function')return;
+      const moved=[];
+      for(const p of projList()){
+        const h=p.h3long;if(!h||(h.p2==null&&h.p3==null))continue;
+        const b=await idbGet(p.id);
+        const keep=b&&(b.t||0)>(h.t||0)?Object.assign({},h,b):Object.assign({},b||{},h);
+        if(await idbPut(p.id,keep))moved.push(p.id);
+      }
+      if(!moved.length)return;
+      const list=projList();
+      for(const p of list)if(moved.includes(p.id)&&p.h3long){p.h3long={clips:p.h3long.clips||0,t:p.h3long.t||0};}
+      saveProjects(list);
+    }catch(e){}
+  }
+  // warn when this browser's storage is full
+  function storageWarn(){
+    let ok=true,tot=0;
+    try{for(let i=0;i<localStorage.length;i++){const k=localStorage.key(i);tot+=k.length+(localStorage.getItem(k)||'').length;}}catch(e){}
+    try{localStorage.setItem('h3next.__probe','x'.repeat(20000));}catch(e){ok=false;}
+    try{localStorage.removeItem('h3next.__probe');}catch(e){}
+    let b=document.getElementById('h3StoreWarn');
+    if(ok){if(b)b.remove();return;}
+    if(!b){b=document.createElement('div');b.id='h3StoreWarn';b.style.cssText='position:sticky;top:0;z-index:9999;background:#5a1d1d;color:#fff;padding:10px 14px;font-size:13px;line-height:1.5';document.body.insertBefore(b,document.body.firstChild);}
+    b.textContent=`⚠ このブラウザの保存容量がいっぱいです（使用 約${Math.round(tot/10000)}万文字）。案件の保存・LoRAの切り替え・案件追加ができません。`;
   }
   // once: move the older storage (shared keys, then per-project keys) into the project objects
   function migrate(){
@@ -56,7 +86,7 @@
     let h=projGet();
     const b=await idbGet(id);
     if(id!==pid())return;
-    if(b&&(b.t||0)>(h.t||0))h=b;
+    if(b)h=(b.t||0)>(h.t||0)?Object.assign({},h,b):Object.assign({},b,h);
     cur=Object.assign({},h);
     clips=parseInt(h.clips||0,10)||0;
     for(let n=2;n<=MAXP;n++){const t=document.getElementById('longPrompt'+n);if(t)t.value=h['p'+n]||'';}
@@ -95,7 +125,7 @@
     loadProject();
     window.addEventListener('h3:project-changed',e=>{setTimeout(loadProject,0);});
     runCard();
-    setTimeout(()=>{migrate();loadProject();try{if(typeof apiUrl==='function'){lastBase=apiUrl('');poll();}}catch(e){}},1500);
+    setTimeout(async()=>{migrate();await slim();loadProject();storageWarn();try{if(typeof apiUrl==='function'){lastBase=apiUrl('');poll();}}catch(e){}},1500);
   }
 
   function runCard(){
