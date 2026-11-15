@@ -190,6 +190,23 @@
     return origFetch(input,opts);
   };
 
+  // Tell the user when a newer long.js is published (a tab left open keeps running the old code).
+  const MYV='10';
+  async function verCheck(){
+    try{
+      const t=await origFetch('https://shuichisaitofd.github.io/h3-studio-next/index.html?t='+Date.now(),{cache:'no-store'}).then(r=>r.text());
+      const m=t.match(/long\.js\?v=(\d+)/);
+      if(!m||m[1]===MYV||document.getElementById('h3VerWarn'))return;
+      const b=document.createElement('div');b.id='h3VerWarn';
+      b.style.cssText='position:sticky;top:0;z-index:9999;background:#1d3a5a;color:#fff;padding:10px 14px;font-size:13px;line-height:1.5';
+      b.innerHTML='新しい版があります。<button type="button" style="margin-left:8px">読み込み直す</button>';
+      b.querySelector('button').onclick=()=>location.reload();
+      document.body.insertBefore(b,document.body.firstChild);
+    }catch(e){}
+  }
+  setTimeout(verCheck,5000);setInterval(verCheck,10*60*1000);
+  document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')verCheck();});
+
   let lastBase='';let timer=null;let busy=false;
   const esc=s=>String(s==null?'':s).replace(/[<>&"]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
   const m=s=>`${Math.floor(s/60)}分${String(s%60).padStart(2,'0')}秒`;
