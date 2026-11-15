@@ -22,9 +22,19 @@
   function idb(){return new Promise((res,rej)=>{const r=indexedDB.open('h3next-long',1);r.onupgradeneeded=()=>r.result.createObjectStore('p');r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error);});}
   async function idbPut(k,v){try{const db=await idb();await new Promise((res,rej)=>{const tx=db.transaction('p','readwrite');tx.objectStore('p').put(v,k);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error);});return true;}catch(e){return false;}}
   async function idbGet(k){try{const db=await idb();return await new Promise(res=>{const r=db.transaction('p').objectStore('p').get(k);r.onsuccess=()=>res(r.result||null);r.onerror=()=>res(null);});}catch(e){return null;}}
-  let cur={},saveFail=false;
+  let cur={},curId=null,saveFail=false;
   function projSet(patch){
     const id=pid();
+    if(id!==curId){
+      // The boxes still show another 案件 (this one is not loaded yet): never save them under this 案件.
+      if('clips' in patch){
+        const t=Date.now();
+        idbGet(id).then(x=>idbPut(id,Object.assign({},x||{},{clips:patch.clips,t})));
+        try{const list=projList(),p=list.find(x=>x.id===id);if(p&&typeof saveProjects==='function'){p.h3long={clips:patch.clips||0,t};saveProjects(list);}}catch(e){}
+      }
+      setTimeout(loadProject,0);
+      return;
+    }
     cur=Object.assign({},cur,patch,{t:Date.now()});
     idbPut(id,cur);
     if(!('clips' in patch))return; // prompts: IndexedDB only
@@ -90,6 +100,7 @@
     cur=Object.assign({},h);
     clips=parseInt(h.clips||0,10)||0;
     for(let n=2;n<=MAXP;n++){const t=document.getElementById('longPrompt'+n);if(t)t.value=h['p'+n]||'';}
+    curId=id;
     paint();
   }
 
@@ -158,11 +169,13 @@
     try{
       const url=typeof input==='string'?input:(input&&input.url)||'';
       const method=((opts&&opts.method)||'GET').toUpperCase();
+      if(method==='POST'&&/\/prompt$/.test(url.split('?')[0])&&Date.now()<armedUntil&&curId!==pid())await loadProject(); // 本数も今の案件のものを使う
       if(clips>=2&&method==='POST'&&/\/prompt$/.test(url.split('?')[0])&&Date.now()<armedUntil&&opts&&typeof opts.body==='string'){
         const body=JSON.parse(opts.body);
         const g=body&&body.prompt;
         if(g&&g['105:104']&&g['105:104'].class_type==='MiniMaxH3ImageToVideo'){
           armedUntil=0;
+          if(curId!==pid())await loadProject(); // send this 案件's 2本目/3本目, never the previous one's
           const prompts=[];
           for(let n=2;n<=clips;n++)prompts.push(((document.getElementById('longPrompt'+n)||{}).value||'').trim());
           const r=await origFetch(apiBase(url)+'/h3-mobile/api/long/run',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt:g,extra_data:body.extra_data||{},clips,prompts,prompt2:prompts[0]||''})});
