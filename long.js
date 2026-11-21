@@ -191,12 +191,15 @@
   };
 
   // Tell the user when a newer long.js is published (a tab left open keeps running the old code).
-  const MYV='10';
+  const MYV='11';
   async function verCheck(){
     try{
       const t=await origFetch('https://shuichisaitofd.github.io/h3-studio-next/index.html?t='+Date.now(),{cache:'no-store'}).then(r=>r.text());
-      const m=t.match(/long\.js\?v=(\d+)/);
-      if(!m||m[1]===MYV||document.getElementById('h3VerWarn'))return;
+      // Compare every versioned script (long.js, runpod.js, LoRA list, ...), not just long.js.
+      const sig=a=>a.filter(x=>/\?v=/.test(x)).map(x=>x.replace(/^.*\//,'')).sort().join('|');
+      const mine=sig([...document.querySelectorAll('script[src]')].map(s=>s.getAttribute('src')));
+      const theirs=sig([...t.matchAll(/<script[^>]*src="([^"]+)"/g)].map(x=>x[1]));
+      if(!theirs||theirs===mine||document.getElementById('h3VerWarn'))return;
       const b=document.createElement('div');b.id='h3VerWarn';
       b.style.cssText='position:sticky;top:0;z-index:9999;background:#1d3a5a;color:#fff;padding:10px 14px;font-size:13px;line-height:1.5';
       b.innerHTML='新しい版があります。<button type="button" style="margin-left:8px">読み込み直す</button>';
