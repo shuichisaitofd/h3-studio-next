@@ -207,7 +207,7 @@
           info.style.cssText = 'flex:1;min-width:0;font-size:13px';
           var gname = p.gpu || (p.costPerHr != null ? (Number(p.costPerHr) < 0.8 ? 'A6000' : 'L40S') : '');
           var active = (typeof getActivePod === 'function') && getActivePod() && getActivePod().baseUrl === podUrl(p.id);
-          info.textContent = (p.name || p.id) + ' / ' + gname + ' / ' + (p.desiredStatus || '') + (p.costPerHr != null ? ' / $' + Number(p.costPerHr).toFixed(2) + '/時' : '') + (active ? ' / 使用中' : '');
+          info.textContent = (p.name || p.id) + ' / ' + gname + ' / ' + (p.desiredStatus || '') + (p.costPerHr != null ? ' / $' + Number(p.costPerHr).toFixed(2) + '/時' : '') + (active ? ' / 使用中' : '') + (p.image ? ' / ' + (p.image === IMAGE ? '最新イメージ' : '古いイメージ（' + String(p.image).slice(-7) + '）') : '');
           if (!active && p.desiredStatus === 'RUNNING') {
             var c = document.createElement('button');
             c.textContent = '接続';
