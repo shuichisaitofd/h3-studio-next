@@ -196,10 +196,9 @@
     try{
       const t=await origFetch('https://shuichisaitofd.github.io/h3-studio-next/index.html?t='+Date.now(),{cache:'no-store'}).then(r=>r.text());
       // Compare every versioned script (long.js, runpod.js, LoRA list, ...), not just long.js.
-      const sig=a=>a.filter(x=>/\?v=/.test(x)).map(x=>x.replace(/^.*\//,'')).sort().join('|');
-      const mine=sig([...document.querySelectorAll('script[src]')].map(s=>s.getAttribute('src')));
-      const theirs=sig([...t.matchAll(/<script[^>]*src="([^"]+)"/g)].map(x=>x[1]));
-      if(!theirs||theirs===mine||document.getElementById('h3VerWarn'))return;
+      const mine=new Set([...document.querySelectorAll('script[src]')].map(s=>s.getAttribute('src')));
+      const theirs=[...t.matchAll(/<script[^>]*src="([^"]+\?v=[^"]+)"/g)].map(x=>x[1]);
+      if(!theirs.length||theirs.every(x=>mine.has(x))||document.getElementById('h3VerWarn'))return;
       const b=document.createElement('div');b.id='h3VerWarn';
       b.style.cssText='position:sticky;top:0;z-index:9999;background:#1d3a5a;color:#fff;padding:10px 14px;font-size:13px;line-height:1.5';
       b.innerHTML='新しい版があります。<button type="button" style="margin-left:8px">読み込み直す</button>';
