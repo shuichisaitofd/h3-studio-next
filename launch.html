@@ -119,7 +119,7 @@ function waitReady(ws,n){
     return new Promise(function(r){setTimeout(r,5000)}).then(function(){return waitReady(ws,n-1)});
   });
 }
-function openWs(ws){location.href=base(ws)+'/'}
+function openWs(ws){location.href=base(ws)+'/h3-mobile/'}
 $('auto').onclick=function(){
   var b=$('auto');b.disabled=true;
   var p=pickBest();
