@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ja"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Modal 起動ページ</title>
+<style>
+:root{color-scheme:dark}
+body{margin:0;background:#111;color:#eee;font:15px/1.6 system-ui,sans-serif;padding:16px;max-width:560px;margin:0 auto}
+h1{font-size:18px;margin:4px 0 12px}
+.card{background:#1c1c1e;border-radius:14px;padding:14px;margin:12px 0}
+.card.best{outline:2px solid #3a7bd5}
+.name{font-weight:700;font-size:16px}
+.row{margin:4px 0;font-size:14px;color:#ccc}
+.st{display:inline-block;padding:1px 10px;border-radius:99px;font-size:13px;margin-left:6px}
+.s-ready{background:#1f6f3a}.s-starting{background:#8a6d1a}.s-stopped{background:#444}.s-ng{background:#7a2a2a}
+button{font:inherit;border:0;border-radius:10px;padding:10px 14px;margin:6px 6px 0 0;background:#2c2c30;color:#fff}
+button.main{background:#3a7bd5;font-weight:700;width:100%;padding:14px;margin:0}
+button:disabled{opacity:.45}
+input{font:inherit;padding:9px;border-radius:8px;border:1px solid #444;background:#222;color:#fff;width:60%}
+.small{font-size:12px;color:#999}
+#msg{margin:10px 0;min-height:22px;color:#9cf}
+</style></head><body>
+<h1>Modal 起動ページ</h1>
+<button class="main" id="auto">自動で選んで起動して開く</button>
+<div id="msg"></div>
+<div id="list"></div>
+<div class="card">
+<div class="name">アカウントを追加</div>
+<div class="row small">Modal の URL「https://〇〇--h3-modal-web…」の〇〇を入れます。先にそのアカウントに h3_modal.py をデプロイしておいてください。</div>
+<input id="addname" placeholder="ワークスペース名" autocapitalize="off" autocorrect="off">
+<button id="addbtn">追加</button>
+<div id="removeRow" class="row small"></div>
+</div>
+<div class="small">残り金額は各アカウントの月間クレジットから使った分を引いた値です。「自動」は、動いているものがあればそれを、なければ残りが一番多いものを起動します。</div>
+<script>
+(function(){
+var DEFAULTS=['shuichisaitofd','saitopod25'];
+var KEY='h3LaunchExtra';
+function extra(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]}}
+function saveExtra(a){try{localStorage.setItem(KEY,JSON.stringify(a))}catch(e){}}
+function all(){var a=DEFAULTS.slice();extra().forEach(function(n){if(a.indexOf(n)<0)a.push(n)});return a}
+function base(ws){return 'https://'+ws+'--h3-modal-web.us-east.modal.run'}
+var data={};  // ws -> {st:{...}|null, use:{...}|null, err:bool}
+var MIN_LEFT=0.5;
+function $(id){return document.getElementById(id)}
+function esc(s){return String(s==null?'':s).replace(/[<>&"]/g,function(c){return{'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]})}
+function msg(t){$('msg').textContent=t||''}
+function j(url,opt,ms){
+  var c=new AbortController();var t=setTimeout(function(){c.abort()},ms||60000);
+  opt=opt||{};opt.signal=c.signal;
+  return fetch(url,opt).then(function(r){clearTimeout(t);if(!r.ok)throw new Error('HTTP '+r.status);return r.json()});
+}
+function refreshStatus(ws){
+  return j(base(ws)+'/h3modal/status').then(function(s){data[ws]=data[ws]||{};data[ws].st=s;data[ws].err=false}).catch(function(){data[ws]=data[ws]||{};data[ws].err=true;data[ws].st=null});
+}
+function refreshUsage(ws){
+  return j(base(ws)+'/h3modal/usage').then(function(u){data[ws]=data[ws]||{};data[ws].use=u}).catch(function(){});
+}
+function label(d){
+  if(!d||d.err)return['確認できません','ng'];
+  var s=d.st&&d.st.status;
+  if(s==='ready')return['使えます','ready'];
+  if(s==='starting')return['起動中','starting'];
+  return['停止中','stopped'];
+}
+function leftOf(ws){var d=data[ws];return d&&d.use&&typeof d.use.left==='number'?d.use.left:null}
+function pickBest(){
+  var names=all(),ready=null,starting=null,best=null;
+  names.forEach(function(w){
+    var d=data[w];if(!d||d.err||!d.st)return;
+    if(d.st.status==='ready'&&!ready)ready=w;
+    else if(d.st.status==='starting'&&!starting)starting=w;
+  });
+  if(ready)return{ws:ready,why:'動いています'};
+  if(starting)return{ws:starting,why:'起動中です'};
+  names.forEach(function(w){
+    var d=data[w];if(!d||d.err)return;
+    var l=leftOf(w);if(l!=null&&l<MIN_LEFT)return;
+    if(!best||(l!=null&&(leftOf(best)==null||l>leftOf(best))))best=w;
+  });
+  return best?{ws:best,why:leftOf(best)!=null?'残りが一番多い（約$'+leftOf(best).toFixed(2)+'）':'使えるアカウント'}:null;
+}
+function render(){
+  var best=pickBest();var h='';
+  all().forEach(function(ws){
+    var d=data[ws]||{};var L=label(d);var st=d.st||{};
+    var left=leftOf(ws);
+    var info='';
+    if(d.use){info+='残り 約$'+(left!=null?left.toFixed(2):'?')+'（約'+(d.use.hours_left!=null?d.use.hours_left:'?')+'時間分）';}
+    else if(!d.err)info+='残り金額を確認中…';
+    if(st.status==='ready')info+=(info?' / ':'')+'自動停止まで 約'+Math.ceil((st.idle_left||0)/60)+'分'+(st.busy?'（作業中）':'');
+    if(d.err)info='このアカウントに h3_modal.py がデプロイされていないか、つながりません。';
+    h+='<div class="card'+(best&&best.ws===ws?' best':'')+'" data-ws="'+esc(ws)+'">'
+      +'<div class="name">'+esc(ws)+'<span class="st s-'+L[1]+'">'+L[0]+'</span>'+(best&&best.ws===ws?' <span class="small">← 自動で選ばれる</span>':'')+'</div>'
+      +'<div class="row">'+esc(info)+'</div>'
+      +'<button data-a="start"'+((st.status==='ready'||st.status==='starting'||d.err)?' disabled':'')+'>起動</button>'
+      +'<button data-a="open"'+(st.status==='ready'?'':' disabled')+'>開く</button>'
+      +'<button data-a="copy">URLをコピー</button>'
+      +'<button data-a="stop"'+(st.status==='ready'||st.status==='starting'?'':' disabled')+'>停止</button>'
+      +'</div>';
+  });
+  $('list').innerHTML=h;
+  var ex=extra();
+  $('removeRow').innerHTML=ex.length?('追加したもの: '+ex.map(function(n){return esc(n)+' <a href="#" data-rm="'+esc(n)+'" style="color:#f99">削除</a>'}).join(' / ')):'';
+}
+function refreshAll(){
+  return Promise.all(all().map(refreshStatus)).then(render);
+}
+function usageAll(){all().forEach(function(w){refreshUsage(w).then(render)})}
+function startWs(ws){
+  msg(ws+' を起動します…（GPUの準備に1〜2分かかります）');
+  return j(base(ws)+'/h3modal/start',{method:'POST'}).then(function(){return refreshStatus(ws)}).then(render);
+}
+function waitReady(ws,n){
+  return refreshStatus(ws).then(function(){
+    render();var s=data[ws].st&&data[ws].st.status;
+    if(s==='ready')return true;
+    if(n<=0||s==='stopped')return false;
+    msg(ws+' の準備を待っています…');
+    return new Promise(function(r){setTimeout(r,5000)}).then(function(){return waitReady(ws,n-1)});
+  });
+}
+function openWs(ws){location.href=base(ws)+'/'}
+$('auto').onclick=function(){
+  var b=$('auto');b.disabled=true;
+  var p=pickBest();
+  if(!p){msg('使えるアカウントがありません（残りが少ないか、つながりません）。');b.disabled=false;return}
+  msg(p.ws+' を使います（'+p.why+'）');
+  var s=data[p.ws].st&&data[p.ws].st.status;
+  var go=(s==='ready')?Promise.resolve(true):(s==='starting'?Promise.resolve():startWs(p.ws)).then(function(){return waitReady(p.ws,60)});
+  go.then(function(ok){
+    b.disabled=false;
+    if(ok){msg(p.ws+' が使えます。開きます。');openWs(p.ws)}
+    else msg(p.ws+' が起動しませんでした。もう一度押すか、別のアカウントを手動で起動してください。');
+  });
+};
+$('list').onclick=function(e){
+  var t=e.target;if(t.tagName!=='BUTTON')return;
+  var card=t.closest('.card');var ws=card&&card.getAttribute('data-ws');var a=t.getAttribute('data-a');
+  if(!ws)return;
+  if(a==='start')startWs(ws).then(function(){return waitReady(ws,60)}).then(function(ok){msg(ok?ws+' が使えます。':ws+' が起動しませんでした。')});
+  else if(a==='open')openWs(ws);
+  else if(a==='copy'){var u=base(ws)+'/';try{navigator.clipboard.writeText(u);msg('URLをコピーしました: '+u)}catch(x){msg(u)}}
+  else if(a==='stop'){if(confirm(ws+' を止めますか？（作業中のものがあれば消えます）'))j(base(ws)+'/h3modal/stop',{method:'POST'}).then(function(){msg(ws+' に停止を送りました。');return refreshStatus(ws)}).then(render)}
+};
+$('addbtn').onclick=function(){
+  var v=$('addname').value.trim().toLowerCase();
+  if(!/^[a-z0-9][a-z0-9-]*$/.test(v)){msg('英数字とハイフンだけで入力してください。');return}
+  var ex=extra();if(all().indexOf(v)>=0){msg('すでにあります。');return}
+  ex.push(v);saveExtra(ex);$('addname').value='';msg(v+' を追加しました。');
+  refreshStatus(v).then(function(){render();return refreshUsage(v)}).then(render);
+};
+$('removeRow').onclick=function(e){
+  var n=e.target.getAttribute&&e.target.getAttribute('data-rm');if(!n)return;e.preventDefault();
+  saveExtra(extra().filter(function(x){return x!==n}));delete data[n];render();
+};
+render();
+refreshAll().then(usageAll);
+setInterval(function(){refreshAll()},15000);
+})();
+</script></body></html>
