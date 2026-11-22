@@ -33,7 +33,7 @@ input{font:inherit;padding:9px;border-radius:8px;border:1px solid #444;backgroun
 <div class="small">残り金額は各アカウントの月間クレジットから使った分を引いた値です。「自動」は、動いているものがあればそれを、なければ残りが一番多いものを起動します。</div>
 <script>
 (function(){
-var DEFAULTS=['shuichisaitofd','saitopod25'];
+var DEFAULTS=['shuichisaitofd','saitopod25','shu-saito25'];
 var KEY='h3LaunchExtra';
 function extra(){try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch(e){return[]}}
 function saveExtra(a){try{localStorage.setItem(KEY,JSON.stringify(a))}catch(e){}}
