@@ -5,7 +5,8 @@
 (function () {
   // Two Modal accounts: if the first one is out of credits or down, the second one passes the requests on.
   var RELAYS = ['https://shuichisaitofd--h3-modal-web.us-east.modal.run/h3modal/runpod',
-                'https://saitopod25--h3-modal-web.us-east.modal.run/h3modal/runpod'];
+                'https://saitopod25--h3-modal-web.us-east.modal.run/h3modal/runpod',
+                'https://shu-saito25--h3-modal-web.us-east.modal.run/h3modal/runpod'];
   var RELAY = RELAYS[0];
   function rpost(path, body, base) {
     var list = base ? [base] : RELAYS.slice();
