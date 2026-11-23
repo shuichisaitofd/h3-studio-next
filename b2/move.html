@@ -27,8 +27,11 @@ backupRaw().then(function(bk){
  if(!o.ls[RAW]&&bk)o.ls[RAW]=bk;
  var n=(arr(o.ls[RAW])||[]).length;
  return readImages().then(function(im){o.images=im;var blob=new Blob([JSON.stringify(o)],{type:'application/json'});
-  var url=URL.createObjectURL(blob),a='<a class="b" download="h3-normal-projects.json" href="'+url+'">ファイルを保存する（タップ）</a>';
-  document.getElementById('dl').innerHTML=a;
+  var url=URL.createObjectURL(blob);window.__blob=blob;
+  document.getElementById('dl').innerHTML='<button id="sh">共有して「ファイルに保存」する</button><a class="b" id="dla" download="h3-normal-projects.json" href="'+url+'">うまくいかないとき：ダウンロードで保存</a><div class="c"><small>共有の画面が出たら「“ファイル”に保存」を選び、保存先を選んでください。</small></div>';
+  document.getElementById('sh').onclick=function(){var f=new File([window.__blob],'h3-normal-projects.json',{type:'application/json'});
+   if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[f]}))){navigator.share({files:[f]}).then(function(){say(true,'✅ 共有しました。保存できたか「ファイル」アプリで確認してください。')}).catch(function(e){if(e&&e.name!=='AbortError')say(false,'⚠️ 共有に失敗: '+e)})}
+   else say(false,'⚠️ このブラウザは共有に対応していません。下の「ダウンロードで保存」を押してください。')};
   say(n>0,(n>0?'✅ ':'⚠️ ')+'案件 '+n+' 件、画像 '+im.length+' 点。下の青いボタンを押して保存してください。（'+Math.round(blob.size/1024)+'KB）')
  })}).catch(function(e){say(false,'⚠️ 失敗しました: '+e)})};
 document.getElementById('f').onchange=function(){var f=this.files[0];if(!f)return;say(true,'読み込み中…');
