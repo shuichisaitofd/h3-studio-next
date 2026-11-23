@@ -28,10 +28,10 @@ window.__b2ready=new Promise(function(resolve){
   q.onerror=function(){fin();};
   q.onblocked=function(){fin();};
   q.onsuccess=function(){db=q.result;
-   var all=db.transaction('kv').objectStore('kv'),keys=all.getAllKeys(),vals=all.getAll();
-   var m={};
-   vals.onsuccess=function(){keys.onsuccess=function(){
-     keys.result.forEach(function(kk,i){m[kk]=vals.result[i];});
+   var m={},c=db.transaction('kv').objectStore('kv').openCursor();
+   c.onerror=function(){fin();};
+   c.onsuccess=function(){var cur=c.result;
+     if(cur){m[cur.key]=cur.value;cur.continue();return;}
      if(m['__migrated']===undefined){
        var src=['studioB2.','studio.'],used='';
        for(var i=0;i<src.length;i++){var v=g.call(L,src[i]+'h3MobileProjects');if(v&&!isDefault(v)){used=src[i];break;}}
@@ -40,8 +40,7 @@ window.__b2ready=new Promise(function(resolve){
        m['__migrated']=used||'none';
        try{var t=db.transaction('kv','readwrite'),st=t.objectStore('kv');Object.keys(m).forEach(function(x){st.put(m[x],x);});}catch(e){}
      }
-     delete m['__migrated'];mem=m;fin();};};
-   vals.onerror=keys.onerror=function(){fin();};
+     delete m['__migrated'];mem=m;fin();};
   };
  }catch(e){fin();}
 });
