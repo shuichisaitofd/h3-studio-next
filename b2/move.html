@@ -1,7 +1,7 @@
 <!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>通常の案件を別のブラウザへ</title>
 <style>body{font:18px/1.7 -apple-system,sans-serif;margin:0;padding:16px;background:#111;color:#eee}.c{background:#1c1c1e;border-radius:12px;padding:14px;margin:12px 0}#r{display:none}#r.ok{display:block;background:#14351f}#r.ng{display:block;background:#4a1d1d}button,label.b,a.b{display:block;width:100%;box-sizing:border-box;text-align:center;background:#2f6bff;color:#fff;border:0;border-radius:12px;padding:16px;margin-top:12px;text-decoration:none;font-size:18px}input[type=file]{display:none}small{color:#aaa}</style></head><body>
 <div class="c"><b>① 今のブラウザ（Safari）で：書き出す</b><br>通常の案件と画像を 1 つのファイルにして保存します。ここにあるデータは消えません。</div>
-<button id="ex">案件をファイルに書き出す</button><div id="dl"></div>
+<button id="ex">画像なしで書き出す（軽い・おすすめ）</button><button id="ex2" style="background:#444">画像つきで書き出す（重い）</button><div id="dl"></div>
 <div class="c"><b>② 移したいブラウザ（Chrome など）で：読み込む</b><br>このページを Chrome で開き、①で作ったファイルを選びます。</div>
 <label class="b" for="f">ファイルを選んで読み込む</label><input type="file" id="f" accept=".json,application/json">
 <div id="r" class="c"></div><p><small id="d"></small></p>
@@ -22,14 +22,14 @@ function readImages(){return new Promise(function(res){var q=indexedDB.open(PDB)
  q.onsuccess=function(){var db=q.result;if(!db.objectStoreNames.contains('images')){res([]);return}var g=db.transaction('images').objectStore('images').getAll();g.onsuccess=function(){Promise.all(g.result.map(ser)).then(res)};g.onerror=function(){res([])}}})}
 function readImageRecs(){return new Promise(function(res){var q=indexedDB.open(PDB);q.onupgradeneeded=function(){q.transaction.abort()};q.onerror=function(){res([])};
  q.onsuccess=function(){var db=q.result;if(!db.objectStoreNames.contains('images')){res([]);return}var g=db.transaction('images').objectStore('images').getAll();g.onsuccess=function(){res(g.result)};g.onerror=function(){res([])}}})}
-document.getElementById('ex').onclick=function(){say(true,'書き出し中…（少し待ちます）');
+function doExport(withImg){say(true,'書き出し中…（少し待ちます）');
 backupRaw().then(function(bk){
  var ls={};
  for(var i=0;i<L.length;i++){var k=L.key(i);if(/^(studio\\.|studioB2\\.|kabu\\.|__ob)/.test(k))continue;ls[k]=L.getItem(k)}
  if(bk&&(!ls[RAW]||bk.length>ls[RAW].length))ls[RAW]=bk;
  var n=(arr(ls[RAW])||[]).length;
  var blob=new Blob(['{"ver":1,"ls":',JSON.stringify(ls),',"images":[']);ls=null;bk=null;
- return readImageRecs().then(function(recs){var cnt=0;
+ return (withImg?readImageRecs():Promise.resolve([])).then(function(recs){var cnt=0;
   return recs.reduce(function(p,rec){return p.then(function(){return ser(rec).then(function(o){blob=new Blob([blob,(cnt?',':'')+JSON.stringify(o)]);cnt++})})},Promise.resolve()).then(function(){
    blob=new Blob([blob,']}'],{type:'application/json'});window.__blob=blob;var url=URL.createObjectURL(blob);
    document.getElementById('dl').innerHTML='<button id="sh">共有して「ファイルに保存」する</button><a class="b" id="dla" download="h3-normal-projects.json" href="'+url+'">うまくいかないとき：ダウンロードで保存</a><div class="c"><small>共有の画面が出たら「“ファイル”に保存」を選び、保存先を選んでください。</small></div>';
@@ -38,6 +38,7 @@ backupRaw().then(function(bk){
     else say(false,'⚠️ このブラウザは共有に対応していません。下の「ダウンロードで保存」を押してください。')};
    say(n>0,(n>0?'✅ ':'⚠️ ')+'案件 '+n+' 件、画像 '+cnt+' 点。下の青いボタンを押して保存してください。（'+Math.round(blob.size/1024)+'KB）')})})
 }).catch(function(e){say(false,'⚠️ 失敗しました: '+e)})};
+document.getElementById('ex').onclick=function(){doExport(false)};document.getElementById('ex2').onclick=function(){doExport(true)};
 function putKV(k,v){return openDb(BK,1,function(db){db.createObjectStore('kv')}).then(function(db){return new Promise(function(res,rej){var t=db.transaction('kv','readwrite');t.objectStore('kv').put(v,k);t.oncomplete=res;t.onerror=function(){rej(t.error)}})})}
 document.getElementById('f').onchange=function(){var f=this.files[0];if(!f)return;say(true,'読み込み中…');
  var fr=new FileReader();fr.onerror=function(){say(false,'⚠️ ファイルを開けません')};fr.onload=function(){var o;try{o=JSON.parse(fr.result)}catch(e){say(false,'⚠️ ファイルが壊れています: '+e);return}
