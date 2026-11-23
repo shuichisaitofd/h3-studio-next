@@ -1,22 +1,20 @@
-<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>案件を β2 に取り込む</title>
-<style>body{font:16px/1.6 -apple-system,sans-serif;margin:0;padding:16px;background:#111;color:#eee}h1{font-size:18px}.c{background:#1c1c1e;border-radius:12px;padding:12px;margin:12px 0}button{font-size:16px;padding:12px 14px;border-radius:10px;border:0;background:#2f6bff;color:#fff;width:100%;margin-top:8px}small{color:#aaa}a{color:#7ab}</style></head><body>
-<h1>案件を β2 に取り込む</h1>
-<small>このブラウザに残っている案件を探して、β2 にコピーします。元の案件は消えません。</small>
-<div id="list"></div><div id="msg" class="c" style="display:none"></div>
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>β2 に案件を入れる</title>
+<style>body{font:18px/1.7 -apple-system,sans-serif;margin:0;padding:16px;background:#111;color:#eee}#r{background:#14351f;border-radius:12px;padding:14px}#r.ng{background:#4a1d1d}a.b{display:block;text-align:center;background:#2f6bff;color:#fff;border-radius:12px;padding:16px;margin-top:14px;text-decoration:none;font-size:18px}small{color:#aaa}</style></head><body>
+<div id="r">処理中…</div><div id="go"></div><p><small id="d"></small></p>
 <script>
-var L=window.localStorage,KEYS=['h3MobileProjects','h3MobileActiveProjectId','h3MobileProjectFavOnly'];
+(function(){var L=localStorage,r=document.getElementById('r'),go=document.getElementById('go'),d=document.getElementById('d');
 function arr(v){try{var a=JSON.parse(v);return Array.isArray(a)?a:null}catch(e){return null}}
-function find(){var out=[];for(var i=0;i<L.length;i++){var k=L.key(i);if(k&&/h3MobileProjects$/.test(k)){var a=arr(L.getItem(k));out.push({key:k,n:a?a.length:0,names:a?a.map(function(p){return p.name||'(無題)'}):[]});}}return out}
-function render(){var c=document.getElementById('list');var f=find();if(!f.length){c.innerHTML='<div class="c">案件の保存が見つかりませんでした。今の β を開いたブラウザと同じブラウザで、このページを開いてください。</div>';return}
-c.innerHTML=f.map(function(x,i){var b2=x.key.indexOf('studioB2.')===0;return '<div class="c"><b>'+x.key+'</b>'+(b2?'（β2 の保存先）':'')+'<br>案件 '+x.n+' 件<br><small>'+x.names.slice(0,12).join(' / ')+'</small>'+(b2?'':'<button data-i="'+i+'">これを β2 にコピーする</button>')+'</div>'}).join('');
-Array.prototype.forEach.call(c.querySelectorAll('button'),function(b){b.onclick=function(){var x=f[+b.dataset.i];var pre=x.key.replace(/h3MobileProjects$/,'');
-KEYS.forEach(function(k){var v=L.getItem(pre+k);if(v!==null)L.setItem('studioB2.'+k,v)});L.setItem('studioB2.migrated2','manual');
-var back=arr(L.getItem('studioB2.h3MobileProjects'));var m=document.getElementById('msg');m.style.display='block';m.innerHTML=(back&&back.length===x.n?'✅ コピーしました。β2 の案件は '+back.length+' 件です。':'⚠️ コピーに失敗しました。')+'<br><a href="./?r='+Date.now()+'">β2 を開く（押してください）</a>';m.scrollIntoView();render2()}})}
-render();function render2(){setTimeout(render,50)}
-</script><div class="c"><b>診断</b><small id="dbg"></small></div>
-<script>
-window.onerror=function(m){var d=document.getElementById('dbg');d.innerHTML+='<br>エラー: '+m};
-(function(){var d=document.getElementById('dbg'),o=[];try{o.push('ページ: '+location.href);o.push('保存数: '+localStorage.length);
-for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);o.push(k+' ('+(localStorage.getItem(k)||'').length+'字)')}}catch(e){o.push('保存を読めません: '+e)}
-d.innerHTML='<br>'+o.join('<br>')})();
+try{
+var src=null,srcA=null;
+['studio.',''].forEach(function(p){if(src!==null)return;var a=arr(L.getItem(p+'h3MobileProjects'));if(a&&a.length&&!a.every(function(x){return ['案件A','案件B','案件C'].indexOf(x.name)>=0&&!x.prompt})){src=p;srcA=a}});
+if(src===null){r.className='ng';r.innerHTML='コピー元の案件が見つかりませんでした。';}
+else{
+['h3MobileProjects','h3MobileActiveProjectId','h3MobileProjectFavOnly'].forEach(function(k){var v=L.getItem(src+k);if(v!==null)L.setItem('studioB2.'+k,v)});
+L.setItem('studioB2.migrated2','auto:'+src);
+var back=arr(L.getItem('studioB2.h3MobileProjects'));
+if(back&&back.length===srcA.length){r.innerHTML='✅ コピーしました。<br>β2 の案件：'+back.length+' 件<br><small>'+back.slice(0,10).map(function(p){return p.name}).join(' / ')+'</small>';go.innerHTML='<a class="b" href="./?r='+Date.now()+'">β2 を開く</a>'}
+else{r.className='ng';r.innerHTML='⚠️ コピーに失敗しました。'}}
+}catch(e){r.className='ng';r.innerHTML='⚠️ エラー: '+e}
+d.innerHTML='元: '+(src===null?'なし':(src||'(prefix なし)')+'h3MobileProjects');
+})();
 </script></body></html>
