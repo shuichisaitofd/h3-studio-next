@@ -1,0 +1,23 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>通常の案件を戻す</title>
+<style>body{font:18px/1.7 -apple-system,sans-serif;margin:0;padding:16px;background:#111;color:#eee}.c{background:#1c1c1e;border-radius:12px;padding:14px;margin:12px 0}#r{display:none}#r.ok{display:block;background:#14351f}#r.ng{display:block;background:#4a1d1d}button{display:block;width:100%;box-sizing:border-box;background:#2f6bff;color:#fff;border:0;border-radius:12px;padding:16px;margin-top:12px;font-size:18px}small{color:#aaa}</style></head><body>
+<div class="c"><b>通常の案件を戻します。</b><br>ブラウザの保存容量が足りず、通常の案件と β2 にコピーした案件は同時に置けません。<br>そのため、<b>β2 にコピーした案件を外して</b>、通常の案件を戻します。<br>今の β の案件は消えません。β2 は案件が空の状態になります。</div>
+<button id="go">通常の案件を戻す</button>
+<div id="r" class="c"></div><p><small id="d"></small></p>
+<script>
+var L=localStorage,r=document.getElementById('r'),d=document.getElementById('d'),RAW='h3MobileProjects',BK='h3-b2-backup';
+function arr(v){try{var a=JSON.parse(v);return Array.isArray(a)?a:null}catch(e){return null}}
+function say(ok,h){r.className='c '+(ok?'ok':'ng');r.innerHTML=h}
+function idb(){return new Promise(function(res,rej){var q=indexedDB.open(BK,1);q.onupgradeneeded=function(){q.result.createObjectStore('kv')};q.onsuccess=function(){res(q.result)};q.onerror=function(){rej(q.error)}})}
+function get(k){return idb().then(function(db){return new Promise(function(res,rej){var q=db.transaction('kv').objectStore('kv').get(k);q.onsuccess=function(){res(q.result)};q.onerror=function(){rej(q.error)}})})}
+function info(){d.innerHTML='通常の案件: '+((arr(L.getItem(RAW))||[]).length)+' 件 ／ 今の β: '+((arr(L.getItem('studio.'+RAW))||[]).length)+' 件 ／ β2: '+((arr(L.getItem('studioB2.'+RAW))||[]).length)+' 件'}
+info();
+document.getElementById('go').onclick=function(){say(true,'処理中…');
+get('raw.'+RAW).then(function(b){
+ if(!b){if(L.getItem(RAW)){say(true,'通常の案件はすでに戻っています。');info();return}throw new Error('退避した保存が見つかりません')}
+ var keep={};['h3MobileProjects','h3MobileActiveProjectId','h3MobileProjectFavOnly'].forEach(function(k){keep[k]=L.getItem('studioB2.'+k);L.removeItem('studioB2.'+k)});
+ L.setItem('studioB2.migrated2','skip');
+ try{L.setItem(RAW,b)}catch(e){Object.keys(keep).forEach(function(k){if(keep[k]!==null)try{L.setItem('studioB2.'+k,keep[k])}catch(x){}});throw e}
+ var n=(arr(L.getItem(RAW))||[]).length;
+ say(true,'✅ 通常の案件を戻しました（'+n+' 件）。<br>通常版を開いて確認してください。');info();
+}).catch(function(e){say(false,'⚠️ 失敗しました: '+(e&&e.name||'')+' '+(e&&e.message||e));info()})};
+</script></body></html>
