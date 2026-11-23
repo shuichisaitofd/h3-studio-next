@@ -162,7 +162,6 @@ function finish(){
  try{if(f.dcl)document.dispatchEvent(new Event('DOMContentLoaded',{bubbles:true,cancelable:true}));}catch(e){}
  try{if(f.load)window.dispatchEvent(new Event('load'));}catch(e){}
  try{var n=0;try{n=JSON.parse(localStorage.getItem('h3MobileProjects')||'[]').length}catch(e){}badge('保存先: IndexedDB（案件 '+n+' 件）');}catch(e){}
- setTimeout(function(){try{var L=window.__b2err||[];var d=document.createElement('div');d.textContent='診断: '+(L.length?L.length+'件 / '+L.slice(0,6).join(' | '):'エラーなし');d.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:99999;background:#3a1414;color:#fff;font:11px/1.4 sans-serif;padding:8px 10px;border-radius:8px;word-break:break-all';d.onclick=function(){d.remove()};document.body.appendChild(d);}catch(e){}},2500);
 }
 window.__b2ready.then(function(){
  try{Object.defineProperty(document,'readyState',{configurable:true,get:function(){return'loading'}});}catch(e){}
