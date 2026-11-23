@@ -1,20 +1,31 @@
 <!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>β2 に案件を入れる</title>
-<style>body{font:18px/1.7 -apple-system,sans-serif;margin:0;padding:16px;background:#111;color:#eee}#r{background:#14351f;border-radius:12px;padding:14px}#r.ng{background:#4a1d1d}a.b{display:block;text-align:center;background:#2f6bff;color:#fff;border-radius:12px;padding:16px;margin-top:14px;text-decoration:none;font-size:18px}small{color:#aaa}</style></head><body>
-<div id="r">処理中…</div><div id="go"></div><p><small id="d"></small></p>
+<style>body{font:18px/1.7 -apple-system,sans-serif;margin:0;padding:16px;background:#111;color:#eee}.c{background:#1c1c1e;border-radius:12px;padding:14px;margin:12px 0}#r{display:none}#r.ok{display:block;background:#14351f}#r.ng{display:block;background:#4a1d1d}button,a.b{display:block;width:100%;box-sizing:border-box;text-align:center;background:#2f6bff;color:#fff;border:0;border-radius:12px;padding:16px;margin-top:12px;text-decoration:none;font-size:18px}button.g{background:#444}small{color:#aaa}</style></head><body>
+<div class="c"><b>原因：</b>このブラウザの保存容量がいっぱいで、案件をコピーできません。<br>古い大きな保存（約 1.7MB）を別の場所に退避して容量をあけ、そのあとコピーします。退避した分はあとで元に戻せます。</div>
+<button id="go">容量をあけてコピーする</button>
+<div id="r" class="c"></div><div id="nx"></div>
+<button id="undo" class="g">退避した保存を元に戻す</button>
+<p><small id="d"></small></p>
 <script>
-(function(){var L=localStorage,r=document.getElementById('r'),go=document.getElementById('go'),d=document.getElementById('d');
+var L=localStorage,r=document.getElementById('r'),nx=document.getElementById('nx'),d=document.getElementById('d');
+var RAW='h3MobileProjects',BK='h3-b2-backup';
 function arr(v){try{var a=JSON.parse(v);return Array.isArray(a)?a:null}catch(e){return null}}
-try{
-var src=null,srcA=null;
-['studio.',''].forEach(function(p){if(src!==null)return;var a=arr(L.getItem(p+'h3MobileProjects'));if(a&&a.length&&!a.every(function(x){return ['案件A','案件B','案件C'].indexOf(x.name)>=0&&!x.prompt})){src=p;srcA=a}});
-if(src===null){r.className='ng';r.innerHTML='コピー元の案件が見つかりませんでした。';}
-else{
-['h3MobileProjects','h3MobileActiveProjectId','h3MobileProjectFavOnly'].forEach(function(k){var v=L.getItem(src+k);if(v!==null)L.setItem('studioB2.'+k,v)});
-L.setItem('studioB2.migrated2','auto:'+src);
-var back=arr(L.getItem('studioB2.h3MobileProjects'));
-if(back&&back.length===srcA.length){r.innerHTML='✅ コピーしました。<br>β2 の案件：'+back.length+' 件<br><small>'+back.slice(0,10).map(function(p){return p.name}).join(' / ')+'</small>';go.innerHTML='<a class="b" href="./?r='+Date.now()+'">β2 を開く</a>'}
-else{r.className='ng';r.innerHTML='⚠️ コピーに失敗しました。'}}
-}catch(e){r.className='ng';r.innerHTML='⚠️ エラー: '+e}
-d.innerHTML='元: '+(src===null?'なし':(src||'(prefix なし)')+'h3MobileProjects');
-})();
+function say(ok,h){r.className='c '+(ok?'ok':'ng');r.innerHTML=h}
+function idb(){return new Promise(function(res,rej){var q=indexedDB.open(BK,1);q.onupgradeneeded=function(){q.result.createObjectStore('kv')};q.onsuccess=function(){res(q.result)};q.onerror=function(){rej(q.error)}})}
+function put(k,v){return idb().then(function(db){return new Promise(function(res,rej){var t=db.transaction('kv','readwrite');t.objectStore('kv').put(v,k);t.oncomplete=res;t.onerror=function(){rej(t.error)}})})}
+function get(k){return idb().then(function(db){return new Promise(function(res,rej){var q=db.transaction('kv').objectStore('kv').get(k);q.onsuccess=function(){res(q.result)};q.onerror=function(){rej(q.error)}})})}
+function info(){var a=arr(L.getItem('studio.'+RAW));d.innerHTML='今の β の案件: '+(a?a.length+' 件':'なし')+' ／ β2: '+((arr(L.getItem('studioB2.'+RAW))||[]).length)+' 件'}
+info();
+document.getElementById('go').onclick=function(){say(true,'処理中…');
+var src=arr(L.getItem('studio.'+RAW));if(!src||!src.length){say(false,'今の β の案件が見つかりませんでした。');return}
+var raw=L.getItem(RAW),pre=raw===null?Promise.resolve():put('raw.'+RAW,raw).then(function(){return get('raw.'+RAW)}).then(function(b){if(b!==raw)throw new Error('退避の確認に失敗');L.removeItem(RAW)});
+pre.then(function(){
+ ['h3MobileProjects','h3MobileActiveProjectId','h3MobileProjectFavOnly'].forEach(function(k){var v=L.getItem('studio.'+k);if(v!==null)L.setItem('studioB2.'+k,v)});
+ L.setItem('studioB2.migrated2','quota-fix');
+ var back=arr(L.getItem('studioB2.'+RAW));if(!back||back.length!==src.length)throw new Error('コピーの確認に失敗');
+ say(true,'✅ コピーしました。<br>β2 の案件：'+back.length+' 件<br><small>'+back.slice(0,10).map(function(p){return p.name}).join(' / ')+'</small>');
+ nx.innerHTML='<a class="b" href="./?r='+Date.now()+'">β2 を開く</a>';info();
+}).catch(function(e){
+ get('raw.'+RAW).then(function(b){if(b&&L.getItem(RAW)===null){try{L.setItem(RAW,b)}catch(x){}}}).catch(function(){});
+ say(false,'⚠️ 失敗しました: '+(e&&e.name||'')+' '+(e&&e.message||e));info()})};
+document.getElementById('undo').onclick=function(){get('raw.'+RAW).then(function(b){if(!b){say(false,'退避した保存はありません。');return}L.setItem(RAW,b);say(true,'元に戻しました。')}).catch(function(e){say(false,'⚠️ '+e)})};
 </script></body></html>
