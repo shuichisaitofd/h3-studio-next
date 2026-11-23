@@ -20,25 +20,29 @@ function deser(v){if(v&&typeof v==='object'){if(v.__blob)return fetch(v.__blob).
  return Promise.resolve(v)}
 function readImages(){return new Promise(function(res){var q=indexedDB.open(PDB);q.onupgradeneeded=function(){q.transaction.abort()};q.onerror=function(){res([])};
  q.onsuccess=function(){var db=q.result;if(!db.objectStoreNames.contains('images')){res([]);return}var g=db.transaction('images').objectStore('images').getAll();g.onsuccess=function(){Promise.all(g.result.map(ser)).then(res)};g.onerror=function(){res([])}}})}
+function readImageRecs(){return new Promise(function(res){var q=indexedDB.open(PDB);q.onupgradeneeded=function(){q.transaction.abort()};q.onerror=function(){res([])};
+ q.onsuccess=function(){var db=q.result;if(!db.objectStoreNames.contains('images')){res([]);return}var g=db.transaction('images').objectStore('images').getAll();g.onsuccess=function(){res(g.result)};g.onerror=function(){res([])}}})}
 document.getElementById('ex').onclick=function(){say(true,'書き出し中…（少し待ちます）');
 backupRaw().then(function(bk){
- var o={ver:1,ls:{},images:[]};
- for(var i=0;i<L.length;i++){var k=L.key(i);if(/^(studio\.|studioB2\.|kabu\.|__ob)/.test(k))continue;o.ls[k]=L.getItem(k)}
- if(bk&&(!o.ls[RAW]||bk.length>o.ls[RAW].length))o.ls[RAW]=bk;
- var n=(arr(o.ls[RAW])||[]).length;
- return readImages().then(function(im){o.images=im;var blob=new Blob([JSON.stringify(o)],{type:'application/json'});
-  var url=URL.createObjectURL(blob);window.__blob=blob;
-  document.getElementById('dl').innerHTML='<button id="sh">共有して「ファイルに保存」する</button><a class="b" id="dla" download="h3-normal-projects.json" href="'+url+'">うまくいかないとき：ダウンロードで保存</a><div class="c"><small>共有の画面が出たら「“ファイル”に保存」を選び、保存先を選んでください。</small></div>';
-  document.getElementById('sh').onclick=function(){var f=new File([window.__blob],'h3-normal-projects.json',{type:'application/json'});
-   if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[f]}))){navigator.share({files:[f]}).then(function(){say(true,'✅ 共有しました。保存できたか「ファイル」アプリで確認してください。')}).catch(function(e){if(e&&e.name!=='AbortError')say(false,'⚠️ 共有に失敗: '+e)})}
-   else say(false,'⚠️ このブラウザは共有に対応していません。下の「ダウンロードで保存」を押してください。')};
-  say(n>0,(n>0?'✅ ':'⚠️ ')+'案件 '+n+' 件、画像 '+im.length+' 点。下の青いボタンを押して保存してください。（'+Math.round(blob.size/1024)+'KB）')
- })}).catch(function(e){say(false,'⚠️ 失敗しました: '+e)})};
+ var ls={};
+ for(var i=0;i<L.length;i++){var k=L.key(i);if(/^(studio\\.|studioB2\\.|kabu\\.|__ob)/.test(k))continue;ls[k]=L.getItem(k)}
+ if(bk&&(!ls[RAW]||bk.length>ls[RAW].length))ls[RAW]=bk;
+ var n=(arr(ls[RAW])||[]).length;
+ var blob=new Blob(['{"ver":1,"ls":',JSON.stringify(ls),',"images":[']);ls=null;bk=null;
+ return readImageRecs().then(function(recs){var cnt=0;
+  return recs.reduce(function(p,rec){return p.then(function(){return ser(rec).then(function(o){blob=new Blob([blob,(cnt?',':'')+JSON.stringify(o)]);cnt++})})},Promise.resolve()).then(function(){
+   blob=new Blob([blob,']}'],{type:'application/json'});window.__blob=blob;var url=URL.createObjectURL(blob);
+   document.getElementById('dl').innerHTML='<button id="sh">共有して「ファイルに保存」する</button><a class="b" id="dla" download="h3-normal-projects.json" href="'+url+'">うまくいかないとき：ダウンロードで保存</a><div class="c"><small>共有の画面が出たら「“ファイル”に保存」を選び、保存先を選んでください。</small></div>';
+   document.getElementById('sh').onclick=function(){var f=new File([window.__blob],'h3-normal-projects.json',{type:'application/json'});
+    if(navigator.share&&(!navigator.canShare||navigator.canShare({files:[f]}))){navigator.share({files:[f]}).then(function(){say(true,'✅ 共有しました。保存できたか「ファイル」アプリで確認してください。')}).catch(function(e){if(e&&e.name!=='AbortError')say(false,'⚠️ 共有に失敗: '+e)})}
+    else say(false,'⚠️ このブラウザは共有に対応していません。下の「ダウンロードで保存」を押してください。')};
+   say(n>0,(n>0?'✅ ':'⚠️ ')+'案件 '+n+' 件、画像 '+cnt+' 点。下の青いボタンを押して保存してください。（'+Math.round(blob.size/1024)+'KB）')})})
+}).catch(function(e){say(false,'⚠️ 失敗しました: '+e)})};
 document.getElementById('f').onchange=function(){var f=this.files[0];if(!f)return;say(true,'読み込み中…');
  var fr=new FileReader();fr.onload=function(){try{var o=JSON.parse(fr.result);
   Object.keys(o.ls).forEach(function(k){L.setItem(k,o.ls[k])});
   Promise.all((o.images||[]).map(deser)).then(function(recs){return openDb(PDB,1,function(db){if(!db.objectStoreNames.contains('images'))db.createObjectStore('images',{keyPath:'key'})}).then(function(db){return new Promise(function(res,rej){var t=db.transaction('images','readwrite'),s=t.objectStore('images');recs.forEach(function(x){s.put(x)});t.oncomplete=res;t.onerror=function(){rej(t.error)}})})}).then(function(){
    say(true,'✅ 読み込みました。案件 '+((arr(L.getItem(RAW))||[]).length)+' 件、画像 '+(o.images||[]).length+' 点。通常版を開いて確認してください。')}).catch(function(e){say(false,'⚠️ 失敗しました: '+e)})
  }catch(e){say(false,'⚠️ ファイルを読めません: '+e)}};fr.readAsText(f)};
-backupRaw().then(function(b){d.innerHTML='このブラウザの通常の案件: '+((arr(L.getItem(RAW))||[]).length)+' 件 ／ 退避してある案件: '+((arr(b)||[]).length)+' 件'});
+d.innerHTML='このブラウザの通常の案件: '+((arr(L.getItem(RAW))||[]).length)+' 件（本物は退避中のことがあります）';
 </script></body></html>
