@@ -7,10 +7,14 @@
 (function(){try{var MAP={h3MobileProjects:1,h3MobileActiveProjectId:1,h3MobileProjectFavOnly:1};var P=Storage.prototype,g=P.getItem,s=P.setItem,r=P.removeItem;
 function pre(x){return MAP[x]||String(x).indexOf('h3next.')===0;}
 function k(o,x){return(o===window.localStorage&&pre(x))?'studioB2.'+x:x;}
-try{var L=window.localStorage;if(!g.call(L,'studioB2.migrated')){
- Object.keys(MAP).forEach(function(x){var v=g.call(L,'studio.'+x);if(v!==null&&g.call(L,'studioB2.'+x)===null)s.call(L,'studioB2.'+x,v);});
- for(var i=0;i<L.length;i++){var n=L.key(i);if(n&&n.indexOf('h3next.')===0){var v2=g.call(L,n);if(g.call(L,'studioB2.'+n)===null)s.call(L,'studioB2.'+n,v2);}}
- s.call(L,'studioB2.migrated',new Date().toISOString());}}catch(e){}
+try{var L=window.localStorage;
+ function empty(v){return v===null||v===''||v==='[]';}
+ if(!g.call(L,'studioB2.migrated')||empty(g.call(L,'studioB2.h3MobileProjects'))){
+  var got=false;
+  Object.keys(MAP).forEach(function(x){var v=g.call(L,'studio.'+x);if(empty(v))v=g.call(L,x);
+   if(v!==null&&empty(g.call(L,'studioB2.'+x))&&!(x==='h3MobileProjects'&&empty(v))){s.call(L,'studioB2.'+x,v);if(x==='h3MobileProjects')got=true;}});
+  for(var i=0;i<L.length;i++){var n=L.key(i);if(n&&n.indexOf('h3next.')===0){var v2=g.call(L,n);if(g.call(L,'studioB2.'+n)===null)s.call(L,'studioB2.'+n,v2);}}
+  if(got)s.call(L,'studioB2.migrated',new Date().toISOString());}}catch(e){}
 P.getItem=function(x){return g.call(this,k(this,x));};
 P.setItem=function(x,v){return s.call(this,k(this,x),v);};
 P.removeItem=function(x){return r.call(this,k(this,x));};}catch(e){}})();
@@ -107,6 +111,6 @@ P.removeItem=function(x){return r.call(this,k(this,x));};}catch(e){}})();
 <script src="https://shuichisaitofd.github.io/h3-studio/veda-panel.js?v=2"></script>
 <script src="https://shuichisaitofd.github.io/h3-studio/veda-eros.js?v=1"></script>
 <script src="https://shuichisaitofd.github.io/h3-studio-next/next.js?v=2"></script>
-<script src="https://shuichisaitofd.github.io/h3-studio-next/long.js?v=12"></script>
+<script src="https://shuichisaitofd.github.io/h3-studio-next/b2/long.js?v=1"></script>
 <script src="https://shuichisaitofd.github.io/h3-studio-next/b2/runpod.js?v=1"></script>
 <script src="https://shuichisaitofd.github.io/h3-studio-next/turbo-test.js?v=1"></script></body></html>
