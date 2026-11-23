@@ -142,6 +142,10 @@ window.__b2ready=new Promise(function(resolve){
 <script type="b2defer" src="https://shuichisaitofd.github.io/h3-studio-next/b2/runpod.js?v=2"></script>
 <script type="b2defer" src="https://shuichisaitofd.github.io/h3-studio-next/turbo-test.js?v=1"></script><script>
 /* H3 Studio β2 (IndexedDB): run the held-back app scripts, in order, once the data is loaded. */
+(function(){var L=window.__b2err=[];function p(m){L.push(String(m).slice(0,200));}
+window.addEventListener('error',function(ev){p((ev.message||'error')+' @'+String(ev.filename||'').split('/').pop()+':'+(ev.lineno||''));},true);
+window.addEventListener('unhandledrejection',function(ev){p('rej: '+(ev.reason&&(ev.reason.message||ev.reason)));});
+})();
 (function(){
 var list=[].slice.call(document.querySelectorAll('script[type="b2defer"]'));
 function badge(t){try{var d=document.createElement('div');d.textContent=t;d.style.cssText='position:fixed;left:8px;bottom:8px;z-index:99999;background:#14351f;color:#fff;font:12px/1.4 sans-serif;padding:6px 10px;border-radius:8px;opacity:.95;pointer-events:none';document.body.appendChild(d);setTimeout(function(){d.remove()},7000);}catch(e){}}
@@ -149,7 +153,7 @@ function run(i){
  if(i>=list.length){finish();return;}
  var o=list[i],n=document.createElement('script');
  for(var a=0;a<o.attributes.length;a++){var at=o.attributes[a];if(at.name!=='type')n.setAttribute(at.name,at.value);}
- if(o.getAttribute('src')){n.async=false;n.onload=n.onerror=function(){run(i+1);};o.parentNode.insertBefore(n,o);}
+ if(o.getAttribute('src')){n.async=false;n.onload=function(){run(i+1);};n.onerror=function(){(window.__b2err||[]).push('load失敗: '+String(o.getAttribute('src')).split('/').pop());run(i+1);};o.parentNode.insertBefore(n,o);}
  else{n.textContent=o.textContent;o.parentNode.insertBefore(n,o);run(i+1);}
 }
 function finish(){
@@ -158,6 +162,7 @@ function finish(){
  try{if(f.dcl)document.dispatchEvent(new Event('DOMContentLoaded',{bubbles:true,cancelable:true}));}catch(e){}
  try{if(f.load)window.dispatchEvent(new Event('load'));}catch(e){}
  try{var n=0;try{n=JSON.parse(localStorage.getItem('h3MobileProjects')||'[]').length}catch(e){}badge('保存先: IndexedDB（案件 '+n+' 件）');}catch(e){}
+ setTimeout(function(){try{var L=window.__b2err||[];var d=document.createElement('div');d.textContent='診断: '+(L.length?L.length+'件 / '+L.slice(0,6).join(' | '):'エラーなし');d.style.cssText='position:fixed;left:8px;right:8px;top:8px;z-index:99999;background:#3a1414;color:#fff;font:11px/1.4 sans-serif;padding:8px 10px;border-radius:8px;word-break:break-all';d.onclick=function(){d.remove()};document.body.appendChild(d);}catch(e){}},2500);
 }
 window.__b2ready.then(function(){
  try{Object.defineProperty(document,'readyState',{configurable:true,get:function(){return'loading'}});}catch(e){}
