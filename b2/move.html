@@ -1,0 +1,41 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>通常の案件を別のブラウザへ</title>
+<style>body{font:18px/1.7 -apple-system,sans-serif;margin:0;padding:16px;background:#111;color:#eee}.c{background:#1c1c1e;border-radius:12px;padding:14px;margin:12px 0}#r{display:none}#r.ok{display:block;background:#14351f}#r.ng{display:block;background:#4a1d1d}button,label.b,a.b{display:block;width:100%;box-sizing:border-box;text-align:center;background:#2f6bff;color:#fff;border:0;border-radius:12px;padding:16px;margin-top:12px;text-decoration:none;font-size:18px}input[type=file]{display:none}small{color:#aaa}</style></head><body>
+<div class="c"><b>① 今のブラウザ（Safari）で：書き出す</b><br>通常の案件と画像を 1 つのファイルにして保存します。ここにあるデータは消えません。</div>
+<button id="ex">案件をファイルに書き出す</button><div id="dl"></div>
+<div class="c"><b>② 移したいブラウザ（Chrome など）で：読み込む</b><br>このページを Chrome で開き、①で作ったファイルを選びます。</div>
+<label class="b" for="f">ファイルを選んで読み込む</label><input type="file" id="f" accept=".json,application/json">
+<div id="r" class="c"></div><p><small id="d"></small></p>
+<script>
+var L=localStorage,r=document.getElementById('r'),d=document.getElementById('d'),RAW='h3MobileProjects',BK='h3-b2-backup',PDB='h3-mobile-projects';
+function say(ok,h){r.className='c '+(ok?'ok':'ng');r.innerHTML=h}
+function arr(v){try{var a=JSON.parse(v);return Array.isArray(a)?a:null}catch(e){return null}}
+function openDb(name,ver,up){return new Promise(function(res,rej){var q=indexedDB.open(name,ver);q.onupgradeneeded=function(){up&&up(q.result)};q.onsuccess=function(){res(q.result)};q.onerror=function(){rej(q.error)}})}
+function backupRaw(){return openDb(BK,1,function(db){db.createObjectStore('kv')}).then(function(db){return new Promise(function(res){var q=db.transaction('kv').objectStore('kv').get('raw.'+RAW);q.onsuccess=function(){res(q.result||null)};q.onerror=function(){res(null)}})}).catch(function(){return null})}
+function b2d(b){return new Promise(function(res){var f=new FileReader();f.onload=function(){res(f.result)};f.readAsDataURL(b)})}
+function ser(v){if(v instanceof Blob)return b2d(v).then(function(u){return{__blob:u}});
+ if(v&&typeof v==='object'&&!Array.isArray(v)){var ks=Object.keys(v);return Promise.all(ks.map(function(k){return ser(v[k])})).then(function(a){var o={};ks.forEach(function(k,i){o[k]=a[i]});return o})}
+ return Promise.resolve(v)}
+function deser(v){if(v&&typeof v==='object'){if(v.__blob)return fetch(v.__blob).then(function(x){return x.blob()});
+ var ks=Object.keys(v);return Promise.all(ks.map(function(k){return deser(v[k])})).then(function(a){var o=Array.isArray(v)?[]:{};ks.forEach(function(k,i){o[k]=a[i]});return o})}
+ return Promise.resolve(v)}
+function readImages(){return new Promise(function(res){var q=indexedDB.open(PDB);q.onupgradeneeded=function(){q.transaction.abort()};q.onerror=function(){res([])};
+ q.onsuccess=function(){var db=q.result;if(!db.objectStoreNames.contains('images')){res([]);return}var g=db.transaction('images').objectStore('images').getAll();g.onsuccess=function(){Promise.all(g.result.map(ser)).then(res)};g.onerror=function(){res([])}}})}
+document.getElementById('ex').onclick=function(){say(true,'書き出し中…（少し待ちます）');
+backupRaw().then(function(bk){
+ var o={ver:1,ls:{},images:[]};
+ for(var i=0;i<L.length;i++){var k=L.key(i);if(/^(studio\.|studioB2\.|kabu\.|__ob)/.test(k))continue;o.ls[k]=L.getItem(k)}
+ if(!o.ls[RAW]&&bk)o.ls[RAW]=bk;
+ var n=(arr(o.ls[RAW])||[]).length;
+ return readImages().then(function(im){o.images=im;var blob=new Blob([JSON.stringify(o)],{type:'application/json'});
+  var url=URL.createObjectURL(blob),a='<a class="b" download="h3-normal-projects.json" href="'+url+'">ファイルを保存する（タップ）</a>';
+  document.getElementById('dl').innerHTML=a;
+  say(n>0,(n>0?'✅ ':'⚠️ ')+'案件 '+n+' 件、画像 '+im.length+' 点。下の青いボタンを押して保存してください。（'+Math.round(blob.size/1024)+'KB）')
+ })}).catch(function(e){say(false,'⚠️ 失敗しました: '+e)})};
+document.getElementById('f').onchange=function(){var f=this.files[0];if(!f)return;say(true,'読み込み中…');
+ var fr=new FileReader();fr.onload=function(){try{var o=JSON.parse(fr.result);
+  Object.keys(o.ls).forEach(function(k){L.setItem(k,o.ls[k])});
+  Promise.all((o.images||[]).map(deser)).then(function(recs){return openDb(PDB,1,function(db){if(!db.objectStoreNames.contains('images'))db.createObjectStore('images',{keyPath:'key'})}).then(function(db){return new Promise(function(res,rej){var t=db.transaction('images','readwrite'),s=t.objectStore('images');recs.forEach(function(x){s.put(x)});t.oncomplete=res;t.onerror=function(){rej(t.error)}})})}).then(function(){
+   say(true,'✅ 読み込みました。案件 '+((arr(L.getItem(RAW))||[]).length)+' 件、画像 '+(o.images||[]).length+' 点。通常版を開いて確認してください。')}).catch(function(e){say(false,'⚠️ 失敗しました: '+e)})
+ }catch(e){say(false,'⚠️ ファイルを読めません: '+e)}};fr.readAsText(f)};
+d.innerHTML='このブラウザの通常の案件: '+((arr(L.getItem(RAW))||[]).length)+' 件（退避中は 0 件のことがあります）';
+</script></body></html>
