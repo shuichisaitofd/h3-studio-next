@@ -38,11 +38,20 @@ backupRaw().then(function(bk){
     else say(false,'⚠️ このブラウザは共有に対応していません。下の「ダウンロードで保存」を押してください。')};
    say(n>0,(n>0?'✅ ':'⚠️ ')+'案件 '+n+' 件、画像 '+cnt+' 点。下の青いボタンを押して保存してください。（'+Math.round(blob.size/1024)+'KB）')})})
 }).catch(function(e){say(false,'⚠️ 失敗しました: '+e)})};
+function putKV(k,v){return openDb(BK,1,function(db){db.createObjectStore('kv')}).then(function(db){return new Promise(function(res,rej){var t=db.transaction('kv','readwrite');t.objectStore('kv').put(v,k);t.oncomplete=res;t.onerror=function(){rej(t.error)}})})}
 document.getElementById('f').onchange=function(){var f=this.files[0];if(!f)return;say(true,'読み込み中…');
- var fr=new FileReader();fr.onload=function(){try{var o=JSON.parse(fr.result);
-  Object.keys(o.ls).forEach(function(k){L.setItem(k,o.ls[k])});
-  Promise.all((o.images||[]).map(deser)).then(function(recs){return openDb(PDB,1,function(db){if(!db.objectStoreNames.contains('images'))db.createObjectStore('images',{keyPath:'key'})}).then(function(db){return new Promise(function(res,rej){var t=db.transaction('images','readwrite'),s=t.objectStore('images');recs.forEach(function(x){s.put(x)});t.oncomplete=res;t.onerror=function(){rej(t.error)}})})}).then(function(){
-   say(true,'✅ 読み込みました。案件 '+((arr(L.getItem(RAW))||[]).length)+' 件、画像 '+(o.images||[]).length+' 点。通常版を開いて確認してください。')}).catch(function(e){say(false,'⚠️ 失敗しました: '+e)})
- }catch(e){say(false,'⚠️ ファイルを読めません: '+e)}};fr.readAsText(f)};
+ var fr=new FileReader();fr.onerror=function(){say(false,'⚠️ ファイルを開けません')};fr.onload=function(){var o;try{o=JSON.parse(fr.result)}catch(e){say(false,'⚠️ ファイルが壊れています: '+e);return}
+  var keys=Object.keys(o.ls||{}),stash=[];
+  keys.forEach(function(k){var cur=L.getItem(k);if(cur!==null&&cur!==o.ls[k])stash.push([k,cur])});
+  say(true,'このブラウザに前からある '+stash.length+' 件の保存を、先に別の場所へ退避します…');
+  Promise.all(stash.map(function(s){return putKV('prev.'+s[0],s[1])})).then(function(){
+   stash.forEach(function(s){L.removeItem(s[0])});
+   var bad=[];keys.forEach(function(k){try{L.setItem(k,o.ls[k])}catch(e){bad.push(k+'('+(e&&e.name)+')')}});
+   if(bad.length)throw new Error('書き込めませんでした: '+bad.join(', '));
+   return Promise.all((o.images||[]).map(deser))
+  }).then(function(recs){return openDb(PDB,1,function(db){if(!db.objectStoreNames.contains('images'))db.createObjectStore('images',{keyPath:'key'})}).then(function(db){return new Promise(function(res,rej){var t=db.transaction('images','readwrite'),s=t.objectStore('images');recs.forEach(function(x){s.put(x)});t.oncomplete=res;t.onerror=function(){rej(t.error)}})})}).then(function(){
+   say(true,'✅ 読み込みました。案件 '+((arr(L.getItem(RAW))||[]).length)+' 件、画像 '+(o.images||[]).length+' 点。<br>前からあった保存は退避してあります（'+stash.length+' 件）。通常版を開いて確認してください。');
+   d.innerHTML='このブラウザの通常の案件: '+((arr(L.getItem(RAW))||[]).length)+' 件'
+  }).catch(function(e){say(false,'⚠️ 失敗しました: '+(e&&e.message||e))})};fr.readAsText(f)};
 d.innerHTML='このブラウザの通常の案件: '+((arr(L.getItem(RAW))||[]).length)+' 件（本物は退避中のことがあります）';
 </script></body></html>
