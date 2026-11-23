@@ -1,0 +1,17 @@
+<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>案件を β2 に取り込む</title>
+<style>body{font:16px/1.6 -apple-system,sans-serif;margin:0;padding:16px;background:#111;color:#eee}h1{font-size:18px}.c{background:#1c1c1e;border-radius:12px;padding:12px;margin:12px 0}button{font-size:16px;padding:12px 14px;border-radius:10px;border:0;background:#2f6bff;color:#fff;width:100%;margin-top:8px}small{color:#aaa}a{color:#7ab}</style></head><body>
+<h1>案件を β2 に取り込む</h1>
+<small>このブラウザに残っている案件を探して、β2 にコピーします。元の案件は消えません。</small>
+<div id="list"></div><div id="msg" class="c" style="display:none"></div>
+<script>
+var L=window.localStorage,KEYS=['h3MobileProjects','h3MobileActiveProjectId','h3MobileProjectFavOnly'];
+function arr(v){try{var a=JSON.parse(v);return Array.isArray(a)?a:null}catch(e){return null}}
+function find(){var out=[];for(var i=0;i<L.length;i++){var k=L.key(i);if(k&&/h3MobileProjects$/.test(k)){var a=arr(L.getItem(k));out.push({key:k,n:a?a.length:0,names:a?a.map(function(p){return p.name||'(無題)'}):[]});}}return out}
+function render(){var c=document.getElementById('list');var f=find();if(!f.length){c.innerHTML='<div class="c">案件の保存が見つかりませんでした。今の β を開いたブラウザと同じブラウザで、このページを開いてください。</div>';return}
+c.innerHTML=f.map(function(x,i){var b2=x.key.indexOf('studioB2.')===0;return '<div class="c"><b>'+x.key+'</b>'+(b2?'（β2 の保存先）':'')+'<br>案件 '+x.n+' 件<br><small>'+x.names.slice(0,12).join(' / ')+'</small>'+(b2?'':'<button data-i="'+i+'">これを β2 にコピーする</button>')+'</div>'}).join('');
+Array.prototype.forEach.call(c.querySelectorAll('button'),function(b){b.onclick=function(){var x=f[+b.dataset.i];var pre=x.key.replace(/h3MobileProjects$/,'');
+if(!confirm('β2 の案件を、この '+x.n+' 件で置き換えます。よろしいですか？'))return;
+KEYS.forEach(function(k){var v=L.getItem(pre+k);if(v!==null)L.setItem('studioB2.'+k,v)});L.setItem('studioB2.migrated2','manual');
+var m=document.getElementById('msg');m.style.display='block';m.innerHTML='コピーしました（'+x.n+' 件）。<a href="./">β2 を開く</a>'}})}
+render();
+</script></body></html>
