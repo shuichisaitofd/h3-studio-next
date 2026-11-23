@@ -24,7 +24,7 @@ document.getElementById('ex').onclick=function(){say(true,'書き出し中…（
 backupRaw().then(function(bk){
  var o={ver:1,ls:{},images:[]};
  for(var i=0;i<L.length;i++){var k=L.key(i);if(/^(studio\.|studioB2\.|kabu\.|__ob)/.test(k))continue;o.ls[k]=L.getItem(k)}
- if(!o.ls[RAW]&&bk)o.ls[RAW]=bk;
+ if(bk&&(!o.ls[RAW]||bk.length>o.ls[RAW].length))o.ls[RAW]=bk;
  var n=(arr(o.ls[RAW])||[]).length;
  return readImages().then(function(im){o.images=im;var blob=new Blob([JSON.stringify(o)],{type:'application/json'});
   var url=URL.createObjectURL(blob);window.__blob=blob;
@@ -40,5 +40,5 @@ document.getElementById('f').onchange=function(){var f=this.files[0];if(!f)retur
   Promise.all((o.images||[]).map(deser)).then(function(recs){return openDb(PDB,1,function(db){if(!db.objectStoreNames.contains('images'))db.createObjectStore('images',{keyPath:'key'})}).then(function(db){return new Promise(function(res,rej){var t=db.transaction('images','readwrite'),s=t.objectStore('images');recs.forEach(function(x){s.put(x)});t.oncomplete=res;t.onerror=function(){rej(t.error)}})})}).then(function(){
    say(true,'✅ 読み込みました。案件 '+((arr(L.getItem(RAW))||[]).length)+' 件、画像 '+(o.images||[]).length+' 点。通常版を開いて確認してください。')}).catch(function(e){say(false,'⚠️ 失敗しました: '+e)})
  }catch(e){say(false,'⚠️ ファイルを読めません: '+e)}};fr.readAsText(f)};
-d.innerHTML='このブラウザの通常の案件: '+((arr(L.getItem(RAW))||[]).length)+' 件（退避中は 0 件のことがあります）';
+backupRaw().then(function(b){d.innerHTML='このブラウザの通常の案件: '+((arr(L.getItem(RAW))||[]).length)+' 件 ／ 退避してある案件: '+((arr(b)||[]).length)+' 件'});
 </script></body></html>
