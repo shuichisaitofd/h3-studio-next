@@ -13,4 +13,10 @@ Array.prototype.forEach.call(c.querySelectorAll('button'),function(b){b.onclick=
 KEYS.forEach(function(k){var v=L.getItem(pre+k);if(v!==null)L.setItem('studioB2.'+k,v)});L.setItem('studioB2.migrated2','manual');
 var back=arr(L.getItem('studioB2.h3MobileProjects'));var m=document.getElementById('msg');m.style.display='block';m.innerHTML=(back&&back.length===x.n?'✅ コピーしました。β2 の案件は '+back.length+' 件です。':'⚠️ コピーに失敗しました。')+'<br><a href="./?r='+Date.now()+'">β2 を開く（押してください）</a>';m.scrollIntoView();render2()}})}
 render();function render2(){setTimeout(render,50)}
+</script><div class="c"><b>診断</b><small id="dbg"></small></div>
+<script>
+window.onerror=function(m){var d=document.getElementById('dbg');d.innerHTML+='<br>エラー: '+m};
+(function(){var d=document.getElementById('dbg'),o=[];try{o.push('ページ: '+location.href);o.push('保存数: '+localStorage.length);
+for(var i=0;i<localStorage.length;i++){var k=localStorage.key(i);o.push(k+' ('+(localStorage.getItem(k)||'').length+'字)')}}catch(e){o.push('保存を読めません: '+e)}
+d.innerHTML='<br>'+o.join('<br>')})();
 </script></body></html>
