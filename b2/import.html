@@ -10,8 +10,7 @@ function find(){var out=[];for(var i=0;i<L.length;i++){var k=L.key(i);if(k&&/h3M
 function render(){var c=document.getElementById('list');var f=find();if(!f.length){c.innerHTML='<div class="c">案件の保存が見つかりませんでした。今の β を開いたブラウザと同じブラウザで、このページを開いてください。</div>';return}
 c.innerHTML=f.map(function(x,i){var b2=x.key.indexOf('studioB2.')===0;return '<div class="c"><b>'+x.key+'</b>'+(b2?'（β2 の保存先）':'')+'<br>案件 '+x.n+' 件<br><small>'+x.names.slice(0,12).join(' / ')+'</small>'+(b2?'':'<button data-i="'+i+'">これを β2 にコピーする</button>')+'</div>'}).join('');
 Array.prototype.forEach.call(c.querySelectorAll('button'),function(b){b.onclick=function(){var x=f[+b.dataset.i];var pre=x.key.replace(/h3MobileProjects$/,'');
-if(!confirm('β2 の案件を、この '+x.n+' 件で置き換えます。よろしいですか？'))return;
 KEYS.forEach(function(k){var v=L.getItem(pre+k);if(v!==null)L.setItem('studioB2.'+k,v)});L.setItem('studioB2.migrated2','manual');
-var m=document.getElementById('msg');m.style.display='block';m.innerHTML='コピーしました（'+x.n+' 件）。<a href="./">β2 を開く</a>'}})}
-render();
+var back=arr(L.getItem('studioB2.h3MobileProjects'));var m=document.getElementById('msg');m.style.display='block';m.innerHTML=(back&&back.length===x.n?'✅ コピーしました。β2 の案件は '+back.length+' 件です。':'⚠️ コピーに失敗しました。')+'<br><a href="./?r='+Date.now()+'">β2 を開く（押してください）</a>';m.scrollIntoView();render2()}})}
+render();function render2(){setTimeout(render,50)}
 </script></body></html>
