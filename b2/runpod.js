@@ -4,9 +4,9 @@
    which passes them on and keeps nothing. */
 (function () {
   // Two Modal accounts: if the first one is out of credits or down, the second one passes the requests on.
-  var RELAYS = ['https://shuichisaitofd--h3-modal-web.us-east.modal.run/h3modal/runpod',
-                'https://saitopod25--h3-modal-web.us-east.modal.run/h3modal/runpod',
-                'https://shu-saito25--h3-modal-web.us-east.modal.run/h3modal/runpod'];
+  var RELAYS = ['https://shu-saito25--h3-modal-web.us-east.modal.run/h3modal/runpod',
+                'https://shuichisaitofd--h3-modal-web.us-east.modal.run/h3modal/runpod',
+                'https://saitopod25--h3-modal-web.us-east.modal.run/h3modal/runpod'];
   var RELAY = RELAYS[0];
   function rpost(path, body, base) {
     var list = base ? [base] : RELAYS.slice();
@@ -14,7 +14,7 @@
       return fetch(list[i] + path, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: JSON.stringify(body), cache: 'no-store' })
         .then(function (r) { if (r.status >= 500 || r.status === 402 || r.status === 429) throw new Error('HTTP ' + r.status); return r.json(); })
         .then(function (d) { d._base = list[i]; return d; })
-        .catch(function (e) { if (i + 1 < list.length) return go(i + 1); throw e; });
+        .catch(function (e) { var safe = path !== '/watch' || /HTTP (402|429)/.test(String(e && e.message)); if (safe && i + 1 < list.length) return go(i + 1); throw e; });
     }
     return go(0);
   }
