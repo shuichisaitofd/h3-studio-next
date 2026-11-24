@@ -194,7 +194,7 @@
   const MYV='11';
   async function verCheck(){
     try{
-      const t=await origFetch('https://shuichisaitofd.github.io/h3-studio-next/b2/index.html?t='+Date.now(),{cache:'no-store'}).then(r=>r.text());
+      const t=await origFetch(location.origin+location.pathname+'?t='+Date.now(),{cache:'no-store'}).then(r=>r.text());
       // Compare every versioned script (long.js, runpod.js, LoRA list, ...), not just long.js.
       const mine=new Set([...document.querySelectorAll('script[src]')].map(s=>s.getAttribute('src')));
       const theirs=[...t.matchAll(/<script[^>]*src="([^"]+\?v=[^"]+)"/g)].map(x=>x[1]);
