@@ -5,7 +5,7 @@
   var KEY = 'h3veda_state_v1';
   var NODE_ID = '105:200';
   var GUIDER_ID = '105:16';
-  var st = { on: false, pct: 90, ref: null, steps: '', layers: '' }; // ref: null = same as pct; steps/layers: full-attention steps / DiT blocks (text)
+  var st = { on: false, pct: 90, ref: 0, steps: '0', layers: '' }; // ref: null = same as pct; steps/layers: full-attention steps / DiT blocks (text)
   var opts = null;      // allowed sparsity values from ComfyUI (array of strings like "90%"), or null for free numbers
   var refOpts = null;   // allowed reference_sparsity values from ComfyUI, or null
   var predictor = null; // predictor file name from ComfyUI
