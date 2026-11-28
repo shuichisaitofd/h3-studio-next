@@ -18,7 +18,7 @@
     }
     return go(0);
   }
-  var IMAGE = 'ghcr.io/shuichisaitofd/runpod-h3-mobile:h3-triprism-368d664460d50218831b77e8b25b8be9e0dea490';
+  var IMAGE = 'ghcr.io/shuichisaitofd/runpod-h3-mobile:h3-triprism-2b4fb59db2290b92343e1fbc5b622d33ca5f3776';
   var GPUS = [['both', 'どちらでも（先に空いた方）'], ['NVIDIA RTX A6000', 'A6000（$0.59/時・ふつう）'], ['NVIDIA L40S', 'L40S（$1.12/時・速い）']];
   var PENDING_KEY = 'h3nextRunpodPending';
   var GPU_KEY = 'h3nextRunpodGpu';
